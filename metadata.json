@@ -1,0 +1,6 @@
+{
+  "name": "AI STUDENTS",
+  "description": "AI-powered education and board examination preparation platform for Class 10, Class 11, and Class 12 students across BSEB, CBSE, ICSE, and State Boards.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

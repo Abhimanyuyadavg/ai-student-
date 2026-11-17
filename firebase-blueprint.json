@@ -1,0 +1,674 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered platform user (student, admin, or content manager)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 180 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "photoUrl": { "type": "string", "maxLength": 500 },
+        "role": { "type": "string", "enum": ["student", "admin", "content_manager"] },
+        "status": { "type": "string", "enum": ["active", "suspended", "deleted"] },
+        "ageConfirmed": { "type": "boolean" },
+        "guardianConsent": { "type": "boolean" },
+        "guardianContact": { "type": "string", "maxLength": 180 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "role", "status", "createdAt"]
+    },
+    "StudentProfile": {
+      "title": "StudentProfile",
+      "description": "Academic profile and preferences for a student",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "classId": { "type": "string", "maxLength": 64 },
+        "boardId": { "type": "string", "maxLength": 64 },
+        "academicSessionId": { "type": "string", "maxLength": 64 },
+        "streamId": { "type": "string", "maxLength": 64 },
+        "medium": { "type": "string", "enum": ["Hindi", "English", "Hindi + English"] },
+        "selectedSubjectIds": { "type": "array" },
+        "weakSubjectIds": { "type": "array" },
+        "examGoal": { "type": "string", "maxLength": 64 },
+        "preparationLevel": { "type": "string", "enum": ["Beginner", "Intermediate", "Advanced"] },
+        "dailyStudyHours": { "type": "number" },
+        "completedChapterIds": { "type": "array" },
+        "studyStreakDays": { "type": "integer" },
+        "lastStudiedChapterBySubject": { "type": "object" },
+        "studyMinutesLogged": { "type": "number" },
+        "onboardingCompleted": { "type": "boolean" },
+        "notificationPrefs": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "classId", "boardId", "academicSessionId", "medium", "preparationLevel", "onboardingCompleted"]
+    },
+    "Board": {
+      "title": "Board",
+      "description": "Supported educational examination board",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 160 },
+        "boardCode": { "type": "string", "maxLength": 32 },
+        "country": { "type": "string", "maxLength": 64 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "examPatternSummary": { "type": "string", "maxLength": 2000 },
+        "officialSourceUrl": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["Verified Official", "Under Review", "Unverified", "Archived"] }
+      },
+      "required": ["id", "name", "boardCode", "country", "status"]
+    },
+    "AcademicSession": {
+      "title": "AcademicSession",
+      "description": "Academic year session (e.g., 2026-27)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 64 },
+        "startDate": { "type": "string", "maxLength": 32 },
+        "endDate": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "enum": ["Active", "Upcoming", "Archived"] }
+      },
+      "required": ["id", "name", "status"]
+    },
+    "ClassLevel": {
+      "title": "ClassLevel",
+      "description": "School class level (Class 10, Class 11, Class 12)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "className": { "type": "string", "maxLength": 64 },
+        "classLevel": { "type": "integer" }
+      },
+      "required": ["id", "className", "classLevel"]
+    },
+    "Stream": {
+      "title": "Stream",
+      "description": "Academic stream (Science, Commerce, Arts, General)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 64 },
+        "description": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["id", "name"]
+    },
+    "Subject": {
+      "title": "Subject",
+      "description": "Curriculum subject scoped by board, session, class, and stream",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "boardId": { "type": "string", "maxLength": 64 },
+        "academicSessionId": { "type": "string", "maxLength": 64 },
+        "classId": { "type": "string", "maxLength": 64 },
+        "streamId": { "type": "string", "maxLength": 64 },
+        "subjectName": { "type": "string", "maxLength": 160 },
+        "subjectCode": { "type": "string", "maxLength": 32 },
+        "prescribedTextbook": { "type": "string", "maxLength": 200 },
+        "theoryMarks": { "type": "integer" },
+        "practicalMarks": { "type": "integer" },
+        "examDurationMinutes": { "type": "integer" },
+        "status": { "type": "string", "enum": ["Verified Official", "Under Review", "Unverified", "Archived"] },
+        "coverImageUrl": { "type": "string", "maxLength": 500 },
+        "coverImageId": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "boardId", "classId", "subjectName", "subjectCode", "status"]
+    },
+    "Chapter": {
+      "title": "Chapter",
+      "description": "Chapter module inside a curriculum subject",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "subjectId": { "type": "string", "maxLength": 128 },
+        "unitName": { "type": "string", "maxLength": 160 },
+        "chapterNumber": { "type": "integer" },
+        "chapterName": { "type": "string", "maxLength": 200 },
+        "introduction": { "type": "string", "maxLength": 5000 },
+        "completeExplanation": { "type": "string", "maxLength": 20000 },
+        "learningObjectives": { "type": "array" },
+        "definitions": { "type": "array" },
+        "importantFacts": { "type": "array" },
+        "formulas": { "type": "array" },
+        "examples": { "type": "array" },
+        "diagrams": { "type": "array" },
+        "illustrations": { "type": "array" },
+        "revisionNotes": { "type": "string", "maxLength": 10000 },
+        "syllabusStatus": { "type": "string", "enum": ["Verified Official", "Under Review", "Unverified", "Archived"] },
+        "sourceReference": { "type": "string", "maxLength": 300 },
+        "published": { "type": "boolean" }
+      },
+      "required": ["id", "subjectId", "chapterNumber", "chapterName", "syllabusStatus", "published"]
+    },
+    "Topic": {
+      "title": "Topic",
+      "description": "Individual topic inside a chapter",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "chapterId": { "type": "string", "maxLength": 128 },
+        "orderIndex": { "type": "integer" },
+        "topicName": { "type": "string", "maxLength": 200 },
+        "content": { "type": "string", "maxLength": 15000 },
+        "difficulty": { "type": "string", "enum": ["Foundation", "Standard", "HOTS"] }
+      },
+      "required": ["id", "chapterId", "orderIndex", "topicName", "content"]
+    },
+    "LearningMaterial": {
+      "title": "LearningMaterial",
+      "description": "Notes, formula sheets, model papers, worksheets, and verified syllabus documents",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "chapterId": { "type": "string", "maxLength": 128 },
+        "subjectId": { "type": "string", "maxLength": 128 },
+        "boardId": { "type": "string", "maxLength": 64 },
+        "classId": { "type": "string", "maxLength": 64 },
+        "materialType": { "type": "string", "enum": ["Textbook Notes", "Chapter Summary", "Formula Sheet", "Important Questions", "Model Paper", "Previous Year Paper", "Practice Worksheet", "Diagram", "Revision PDF", "Official Syllabus"] },
+        "title": { "type": "string", "maxLength": 240 },
+        "content": { "type": "string", "maxLength": 25000 },
+        "fileUrl": { "type": "string", "maxLength": 500 },
+        "imageUrl": { "type": "string", "maxLength": 500 },
+        "imageId": { "type": "string", "maxLength": 128 },
+        "sourceCitation": { "type": "string", "maxLength": 300 },
+        "verificationStatus": { "type": "string", "enum": ["Verified Official", "Under Review", "Unverified", "Archived"] },
+        "published": { "type": "boolean" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "subjectId", "boardId", "classId", "materialType", "title", "verificationStatus", "published"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "Question bank item with verified source metadata and priority level",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "boardId": { "type": "string", "maxLength": 64 },
+        "classId": { "type": "string", "maxLength": 64 },
+        "academicSessionId": { "type": "string", "maxLength": 64 },
+        "subjectId": { "type": "string", "maxLength": 128 },
+        "chapterId": { "type": "string", "maxLength": 128 },
+        "topicName": { "type": "string", "maxLength": 200 },
+        "questionText": { "type": "string", "maxLength": 4000 },
+        "questionType": { "type": "string", "enum": ["MCQ", "Multiple Correct", "True/False", "Fill in the Blanks", "Match the Following", "Very Short Answer", "Short Answer", "Long Answer", "Numerical", "Diagram-Based", "Case-Based", "Practical"] },
+        "options": { "type": "array" },
+        "correctAnswer": { "type": "string", "maxLength": 2000 },
+        "correctAnswers": { "type": "array" },
+        "matchPairs": { "type": "array" },
+        "diagramSvg": { "type": "string", "maxLength": 64 },
+        "aiGenerated": { "type": "boolean" },
+        "explanation": { "type": "string", "maxLength": 4000 },
+        "modelAnswer": { "type": "string", "maxLength": 6000 },
+        "rubricPoints": { "type": "array" },
+        "marks": { "type": "integer" },
+        "priority": { "type": "string", "enum": ["RED", "YELLOW", "GREEN"] },
+        "isPyq": { "type": "boolean" },
+        "verifiedYears": { "type": "array" },
+        "verifiedAppearances": { "type": "integer" },
+        "sourceType": { "type": "string", "enum": ["Verified Board Paper", "Official Model Paper", "Teacher Curated Practice", "Predicted Practice"] },
+        "sourceDocumentRef": { "type": "string", "maxLength": 300 },
+        "verificationStatus": { "type": "string", "enum": ["Verified Official", "Under Review", "Unverified", "Archived"] },
+        "published": { "type": "boolean" }
+      },
+      "required": ["id", "boardId", "classId", "subjectId", "chapterId", "questionText", "questionType", "marks", "priority", "isPyq", "sourceType", "verificationStatus", "published"]
+    },
+    "CustomTestConfig": {
+      "title": "CustomTestConfig",
+      "description": "Admin-managed custom test or mock exam blueprint",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "boardId": { "type": "string", "maxLength": 64 },
+        "classId": { "type": "string", "maxLength": 64 },
+        "subjectId": { "type": "string", "maxLength": 128 },
+        "chapterId": { "type": "string", "maxLength": 128 },
+        "testCategory": { "type": "string", "enum": ["Chapter Test", "Topic Test", "Daily Practice Test", "Weekly Test", "Full Subject Test", "Previous Year Question Test", "Board Pattern Mock Exam", "Revision Test", "Chapter MCQ", "Written Test", "Mock Exam"] },
+        "durationMinutes": { "type": "integer" },
+        "totalMarks": { "type": "integer" },
+        "questionIds": { "type": "array" },
+        "published": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "boardId", "classId", "subjectId", "testCategory", "durationMinutes", "totalMarks", "published"]
+    },
+    "TestSession": {
+      "title": "TestSession",
+      "description": "Student test or mock examination session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "subjectId": { "type": "string", "maxLength": 128 },
+        "chapterId": { "type": "string", "maxLength": 128 },
+        "testType": { "type": "string", "enum": ["Chapter Test", "Topic Test", "Daily Practice Test", "Weekly Test", "Full Subject Test", "Previous Year Question Test", "Board Pattern Mock Exam", "Revision Test", "Chapter MCQ", "Written Test", "Mock Exam"] },
+        "title": { "type": "string", "maxLength": 200 },
+        "totalMarks": { "type": "integer" },
+        "durationMinutes": { "type": "integer" },
+        "status": { "type": "string", "enum": ["in_progress", "completed"] },
+        "questionIds": { "type": "array" },
+        "draftAnswers": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "studentId", "subjectId", "testType", "totalMarks", "durationMinutes", "status"]
+    },
+    "TestResult": {
+      "title": "TestResult",
+      "description": "Completed test evaluation and analytics record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "testId": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "subjectId": { "type": "string", "maxLength": 128 },
+        "chapterId": { "type": "string", "maxLength": 128 },
+        "testType": { "type": "string", "enum": ["Chapter Test", "Topic Test", "Daily Practice Test", "Weekly Test", "Full Subject Test", "Previous Year Question Test", "Board Pattern Mock Exam", "Revision Test", "Chapter MCQ", "Written Test", "Mock Exam"] },
+        "title": { "type": "string", "maxLength": 200 },
+        "score": { "type": "number" },
+        "totalMarks": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "answers": { "type": "array" },
+        "weakTopics": { "type": "array" },
+        "timeSpentMinutes": { "type": "number" },
+        "completedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "testId", "studentId", "subjectId", "testType", "score", "totalMarks", "accuracy", "completedAt"]
+    },
+    "StudyPlan": {
+      "title": "StudyPlan",
+      "description": "Personal study timetable plan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "planType": { "type": "string", "enum": ["30-Day", "60-Day", "90-Day", "Custom"] },
+        "startDate": { "type": "string", "maxLength": 32 },
+        "endDate": { "type": "string", "maxLength": 32 },
+        "examDate": { "type": "string", "maxLength": 32 },
+        "dailyHours": { "type": "number" },
+        "schoolSchedule": { "type": "string", "maxLength": 200 },
+        "coachingSchedule": { "type": "string", "maxLength": 200 },
+        "targetMarks": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "studentId", "planType", "startDate", "endDate", "dailyHours"]
+    },
+    "StudyTask": {
+      "title": "StudyTask",
+      "description": "Individual scheduled task inside a student study plan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studyPlanId": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 240 },
+        "subjectName": { "type": "string", "maxLength": 120 },
+        "taskType": { "type": "string", "enum": ["Chapter Study", "Revision", "Chapter Test", "Model Paper", "Final Revision"] },
+        "scheduledDate": { "type": "string", "maxLength": 32 },
+        "timeSlot": { "type": "string", "maxLength": 64 },
+        "durationMinutes": { "type": "integer" },
+        "status": { "type": "string", "enum": ["pending", "completed", "overdue"] }
+      },
+      "required": ["id", "studyPlanId", "studentId", "title", "taskType", "scheduledDate", "status"]
+    },
+    "RevisionRecord": {
+      "title": "RevisionRecord",
+      "description": "Spaced revision progress record for a topic or chapter",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "chapterId": { "type": "string", "maxLength": 128 },
+        "subjectId": { "type": "string", "maxLength": 128 },
+        "chapterName": { "type": "string", "maxLength": 200 },
+        "stage": { "type": "integer" },
+        "nextReviewDate": { "type": "string", "maxLength": 32 },
+        "lastPerformance": { "type": "string", "maxLength": 64 },
+        "incorrectQuestionIds": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "studentId", "chapterId", "subjectId", "stage", "nextReviewDate"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Platform announcement or exam update",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "content": { "type": "string", "maxLength": 3000 },
+        "targetBoardId": { "type": "string", "maxLength": 64 },
+        "priority": { "type": "string", "enum": ["normal", "important"] },
+        "published": { "type": "boolean" },
+        "publishedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "title", "content", "published", "publishedAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Student notification item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "message": { "type": "string", "maxLength": 1000 },
+        "category": { "type": "string", "enum": ["task", "test", "revision", "announcement"] },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "studentId", "title", "message", "category", "read", "createdAt"]
+    },
+    "UserFeedback": {
+      "title": "UserFeedback",
+      "description": "Student feedback or content error report",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 120 },
+        "category": { "type": "string", "enum": ["Syllabus Issue", "Question Correction", "App Feedback", "Bug Report", "Feature Suggestion"] },
+        "subject": { "type": "string", "maxLength": 200 },
+        "message": { "type": "string", "maxLength": 3000 },
+        "status": { "type": "string", "enum": ["open", "reviewed", "resolved"] },
+        "adminNote": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "studentId", "category", "subject", "message", "status", "createdAt"]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "Student problem/bug report ticket with tracking status and admin reply",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ticketNumber": { "type": "string", "maxLength": 32 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 120 },
+        "studentContact": { "type": "string", "maxLength": 180 },
+        "category": { "type": "string", "enum": ["App not opening", "Login or registration problems", "AI Teacher not responding", "Voice feature not working", "Wrong answers", "Subject test not opening", "Results not saving", "Payment issues", "Bug Report", "Other technical problems"] },
+        "subject": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 4000 },
+        "screenshotDataUrl": { "type": "string", "maxLength": 600000 },
+        "status": { "type": "string", "enum": ["Pending", "In Progress", "Resolved"] },
+        "adminReply": { "type": "string", "maxLength": 4000 },
+        "repliedBy": { "type": "string", "maxLength": 180 },
+        "repliedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ticketNumber", "studentId", "studentName", "category", "subject", "description", "status", "createdAt", "updatedAt"]
+    },
+    "FaqItem": {
+      "title": "FaqItem",
+      "description": "Admin-managed FAQ entry for Help & Support center",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "enum": ["Help Center", "Account & Login", "AI Teacher & Voice", "Tests & Syllabus", "Technical Support", "Payments", "Privacy & Security"] },
+        "question": { "type": "string", "maxLength": 300 },
+        "answer": { "type": "string", "maxLength": 4000 },
+        "orderIndex": { "type": "integer" },
+        "published": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "category", "question", "answer", "orderIndex", "published"]
+    },
+    "SupportContactInfo": {
+      "title": "SupportContactInfo",
+      "description": "Official owner & support contact settings editable by admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "ownerName": { "type": "string", "maxLength": 120 },
+        "supportEmail": { "type": "string", "maxLength": 180 },
+        "supportPhone": { "type": "string", "maxLength": 24 },
+        "supportAvailability": { "type": "string", "maxLength": 240 },
+        "whatsappChannelUrl": { "type": "string", "maxLength": 400 },
+        "whatsappNumber": { "type": "string", "maxLength": 24 },
+        "updatedBy": { "type": "string", "maxLength": 180 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerName", "updatedAt"]
+    },
+    "AiPromptConfig": {
+      "title": "AiPromptConfig",
+      "description": "Admin-managed AI Teacher instructional prompt template",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 120 },
+        "subjectScope": { "type": "string", "maxLength": 120 },
+        "systemPrompt": { "type": "string", "maxLength": 8000 },
+        "updatedBy": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "subjectScope", "systemPrompt"]
+    },
+    "PaymentRecord": {
+      "title": "PaymentRecord",
+      "description": "Subscription payment record (disabled until gateway configured)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "planName": { "type": "string", "maxLength": 100 },
+        "amount": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "paymentProvider": { "type": "string", "maxLength": 64 },
+        "providerTransactionId": { "type": "string", "maxLength": 160 },
+        "paymentStatus": { "type": "string", "enum": ["pending", "verified", "failed", "refunded"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "studentId", "planName", "amount", "currency", "paymentStatus", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable administrative and content manager action audit log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "userEmail": { "type": "string", "maxLength": 180 },
+        "action": { "type": "string", "maxLength": 120 },
+        "entityType": { "type": "string", "maxLength": 80 },
+        "entityId": { "type": "string", "maxLength": 128 },
+        "details": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "action", "entityType", "entityId", "createdAt"]
+    },
+    "SystemSetting": {
+      "title": "SystemSetting",
+      "description": "Platform configuration flags",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "paymentsEnabled": { "type": "boolean" },
+        "guardianAgeThreshold": { "type": "integer" },
+        "aiModel": { "type": "string", "maxLength": 80 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "paymentsEnabled", "guardianAgeThreshold"]
+    },
+    "AdminMember": {
+      "title": "AdminMember",
+      "description": "Verified platform administrator record",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 180 },
+        "grantedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "UploadedImage": {
+      "title": "UploadedImage",
+      "description": "Metadata record for securely uploaded user or curriculum image",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "enum": ["profile", "ai_question", "support_ticket", "curriculum_subject", "curriculum_chapter", "curriculum_material", "banner", "brand_logo"] },
+        "visibility": { "type": "string", "enum": ["private", "curriculum"] },
+        "mimeType": { "type": "string", "enum": ["image/jpeg", "image/png", "image/webp"] },
+        "sizeBytes": { "type": "integer" },
+        "storageFile": { "type": "string", "maxLength": 200 },
+        "altText": { "type": "string", "maxLength": 300 },
+        "caption": { "type": "string", "maxLength": 500 },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "category", "visibility", "mimeType", "sizeBytes", "createdAt"]
+    },
+    "HomeBanner": {
+      "title": "HomeBanner",
+      "description": "Promotional home screen banner thumbnail card managed by admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "subtitle": { "type": "string", "maxLength": 320 },
+        "ctaLabel": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "imageUrl": { "type": "string", "maxLength": 500 },
+        "imageId": { "type": "string", "maxLength": 128 },
+        "destinationPage": { "type": "string", "enum": ["ai-teacher", "subjects", "tests", "progress", "study-planner", "question-bank", "pyq-bank", "library", "revision"] },
+        "orderIndex": { "type": "integer" },
+        "enabled": { "type": "boolean" },
+        "accentTheme": { "type": "string", "enum": ["blue-purple", "indigo-gold", "cobalt-subjects", "royal-amber", "violet-blue"] },
+        "updatedBy": { "type": "string", "maxLength": 180 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "ctaLabel", "destinationPage", "orderIndex", "enabled", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User account records with PII isolated to owner and admin"
+    },
+    "/studentProfiles/{userId}": {
+      "schema": { "$ref": "#/entities/StudentProfile" },
+      "description": "Student onboarding and academic preferences"
+    },
+    "/boards/{boardId}": {
+      "schema": { "$ref": "#/entities/Board" },
+      "description": "Education boards catalog"
+    },
+    "/academicSessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/AcademicSession" },
+      "description": "Academic sessions catalog"
+    },
+    "/classes/{classId}": {
+      "schema": { "$ref": "#/entities/ClassLevel" },
+      "description": "School classes (10, 11, 12)"
+    },
+    "/streams/{streamId}": {
+      "schema": { "$ref": "#/entities/Stream" },
+      "description": "Academic streams (Science, Commerce, Arts)"
+    },
+    "/subjects/{subjectId}": {
+      "schema": { "$ref": "#/entities/Subject" },
+      "description": "Board and class-specific subjects"
+    },
+    "/chapters/{chapterId}": {
+      "schema": { "$ref": "#/entities/Chapter" },
+      "description": "Subject chapters and learning content"
+    },
+    "/topics/{topicId}": {
+      "schema": { "$ref": "#/entities/Topic" },
+      "description": "Topics within chapters"
+    },
+    "/learningMaterials/{materialId}": {
+      "schema": { "$ref": "#/entities/LearningMaterial" },
+      "description": "Downloadable notes, formula sheets, and model papers"
+    },
+    "/questions/{questionId}": {
+      "schema": { "$ref": "#/entities/Question" },
+      "description": "Question bank including verified PYQs and expected questions"
+    },
+    "/customTests/{testConfigId}": {
+      "schema": { "$ref": "#/entities/CustomTestConfig" },
+      "description": "Admin-managed custom tests and mock exam blueprints"
+    },
+    "/tests/{testId}": {
+      "schema": { "$ref": "#/entities/TestSession" },
+      "description": "Student test sessions"
+    },
+    "/testResults/{resultId}": {
+      "schema": { "$ref": "#/entities/TestResult" },
+      "description": "Completed student test results"
+    },
+    "/studyPlans/{planId}": {
+      "schema": { "$ref": "#/entities/StudyPlan" },
+      "description": "Personal student study plans"
+    },
+    "/studyTasks/{taskId}": {
+      "schema": { "$ref": "#/entities/StudyTask" },
+      "description": "Individual study planner tasks"
+    },
+    "/revisionRecords/{recordId}": {
+      "schema": { "$ref": "#/entities/RevisionRecord" },
+      "description": "Student spaced revision records"
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "Platform announcements"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Student notifications"
+    },
+    "/userFeedback/{feedbackId}": {
+      "schema": { "$ref": "#/entities/UserFeedback" },
+      "description": "Student feedback and content error reports"
+    },
+    "/aiPrompts/{promptId}": {
+      "schema": { "$ref": "#/entities/AiPromptConfig" },
+      "description": "Admin-managed AI Teacher prompt templates"
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/PaymentRecord" },
+      "description": "Server-verified subscription payment records"
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable admin/teacher action audit logs"
+    },
+    "/systemSettings/{settingId}": {
+      "schema": { "$ref": "#/entities/SystemSetting" },
+      "description": "System-wide configuration flags"
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminMember" },
+      "description": "Authorized administrator registry"
+    },
+    "/supportTickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/SupportTicket" },
+      "description": "Student support & bug tickets isolated per student and admin"
+    },
+    "/supportFaqs/{faqId}": {
+      "schema": { "$ref": "#/entities/FaqItem" },
+      "description": "Help center frequently asked questions managed by admin"
+    },
+    "/supportSettings/{settingId}": {
+      "schema": { "$ref": "#/entities/SupportContactInfo" },
+      "description": "Official owner & support contact settings managed by admin"
+    },
+    "/uploadedImages/{imageId}": {
+      "schema": { "$ref": "#/entities/UploadedImage" },
+      "description": "Secure image upload metadata indexed by owner and category"
+    },
+    "/homeBanners/{bannerId}": {
+      "schema": { "$ref": "#/entities/HomeBanner" },
+      "description": "Promotional home screen banner cards managed by admin"
+    }
+  }
+}
