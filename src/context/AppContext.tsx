@@ -7,6 +7,7 @@ import {
   User as FirebaseUser,
 } from 'firebase/auth';
 import { auth, googleAuthProvider, testFirestoreConnection } from '../lib/firebase.ts';
+import { isCapacitorNative } from '../lib/api.ts';
 import {
   deleteEntityDoc,
   deleteFaqDoc,
@@ -110,6 +111,7 @@ export interface NavParams {
   resultId?: string;
   aiInitialTopic?: string;
   authMode?: 'login' | 'register';
+  pdfClassId?: 'class_10' | 'class_11' | 'class_12';
 }
 
 interface AppContextValue {
@@ -609,8 +611,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [hydrateUserWorkspace, refreshAdminData]);
 
   const signInWithGoogle = useCallback(async () => {
-    await signInWithPopup(auth, googleAuthProvider);
-    showToast('Signed in successfully.', 'success');
+    try {
+      await signInWithPopup(auth, googleAuthProvider);
+      showToast('Signed in successfully.', 'success');
+    } catch (err: any) {
+      const code = String(err?.code || '');
+      if (
+        isCapacitorNative() &&
+        (code === 'auth/popup-blocked' ||
+          code === 'auth/operation-not-supported-in-this-environment' ||
+          code === 'auth/unauthorized-domain')
+      ) {
+        throw new Error(
+          'Google popup sign-in is restricted inside this Android WebView. Please use Email/Phone & Password Login or Registration.'
+        );
+      }
+      throw err;
+    }
   }, [showToast]);
 
   const registerWithCredentials = useCallback(

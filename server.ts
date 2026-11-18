@@ -61,8 +61,41 @@ import {
   generatePracticeQuestions,
   generateSubjectTestSet,
   generateStudyPlanAdvice,
+  generatePdfToolResult,
   InlineImagePart,
 } from './src/server/ai.ts';
+import {
+  adminDecidePdfOrder,
+  adminGrantPdfAccessManual,
+  adminRevokePdfAccess,
+  attachGatewayOrderId,
+  createOrReusePdfOrder,
+  deletePdfItemById,
+  getAllEntitlements,
+  getAllOrders,
+  getAllPromoUnlocks,
+  getOrderById,
+  getPdfItemById,
+  getPublicGatewayConfig,
+  getStudentEntitlements,
+  getStudentOrders,
+  getStudentPromoUnlocks,
+  hasStudentPdfAccess,
+  listPdfCatalog,
+  readUploadedPdfBinary,
+  redeemPdfPromoCode,
+  saveUploadedPdfBinary,
+  submitUpiPaymentProof,
+  updateTaxConfig,
+  upsertPdfItem,
+  verifyGatewaySignatureAndUnlock,
+} from './src/server/pdfLibraryStore.ts';
+import {
+  generatePdfToolDocumentBuffer,
+  generateStudyNotePdfBuffer,
+  generateTaxInvoicePdfBuffer,
+} from './src/server/pdfGenerator.ts';
+import type { PdfClassId, PdfPaymentMethod, PdfStreamId } from './src/types/index.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
@@ -89,10 +122,36 @@ async function startServer() {
   const app = express();
   app.use(express.json({ limit: '8mb' }));
 
-  // Basic security headers (iframe compatible)
-  app.use((_req, res, next) => {
+  // CORS support for Capacitor Android WebView origins & configured APP_URL
+  const configuredOrigins = (process.env.ALLOWED_CORS_ORIGINS || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  if (process.env.APP_URL) {
+    configuredOrigins.push(process.env.APP_URL.trim().replace(/\/+$/, ''));
+  }
+  const capacitorOrigins = new Set([
+    'https://localhost',
+    'http://localhost',
+    'capacitor://localhost',
+    'http://127.0.0.1',
+    ...configuredOrigins,
+  ]);
+
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && (capacitorOrigins.has(origin) || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin))) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.setHeader('Access-Control-Max-Age', '86400');
+    }
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
     next();
   });
 
@@ -676,6 +735,77 @@ async function startServer() {
     }
   });
 
+  // PDF Tools AI Endpoint (Notes, Summarize, Hindi <-> English Translate)
+  app.post('/api/ai/pdf-tool', requireAuth, rateLimit(25, 60_000), async (req: AuthRequest, res: Response) => {
+    try {
+      const body = req.body || {};
+      const action = body.action === 'notes' || body.action === 'summarize' || body.action === 'translate' ? body.action : null;
+      if (!action) {
+        return res.status(400).json({ error: 'Invalid PDF tool action. Choose notes, summarize, or translate.' });
+      }
+      const rawText = typeof body.text === 'string' ? body.text.trim() : '';
+      if (rawText.length < 10) {
+        return res.status(400).json({ error: 'PDF text is too short or empty. Please open a readable PDF or paste at least 10 characters.' });
+      }
+      if (body.pdfId) {
+        const item = getPdfItemById(String(body.pdfId));
+        if (!item) {
+          return res.status(404).json({ error: 'Referenced PDF item not found.' });
+        }
+        const uid = req.principal!.uid;
+        const isAdmin = isAdminPrincipal(req.principal);
+        if (!item.isFree && !isAdmin && !hasStudentPdfAccess(uid, item.id)) {
+          return res.status(402).json({ error: 'Unlock this Premium PDF via Free Access Code or ₹19 payment first.' });
+        }
+      }
+      const targetLanguage =
+        body.targetLanguage === 'English' || body.targetLanguage === 'Hindi' || body.targetLanguage === 'Hindi + English'
+          ? body.targetLanguage
+          : 'Hindi + English';
+
+      const result = await generatePdfToolResult({
+        action,
+        text: rawText.slice(0, 18000),
+        title: typeof body.title === 'string' ? body.title.slice(0, 160) : undefined,
+        targetLanguage,
+        style: typeof body.style === 'string' ? body.style.slice(0, 40) : undefined,
+      });
+      return res.json({ result });
+    } catch (error: any) {
+      console.error('PDF Tool AI error:', error);
+      return res.status(error?.status || 500).json({
+        error: error?.message || 'Unable to process PDF tool request right now.',
+      });
+    }
+  });
+
+  // Export generated Notes / Summary / Translation cleanly as a bilingual .pdf
+  app.post('/api/pdf-tools/export-pdf', requireAuth, rateLimit(20, 60_000), async (req: AuthRequest, res: Response) => {
+    try {
+      const body = req.body || {};
+      const title = String(body.title || 'AI STUDENTS PDF Notes').slice(0, 140);
+      const actionLabel = String(body.actionLabel || 'Study Notes').slice(0, 40);
+      const subtitle = body.subtitle ? String(body.subtitle).slice(0, 160) : undefined;
+      const content = typeof body.content === 'string' ? body.content.trim() : '';
+      if (!content) {
+        return res.status(400).json({ error: 'Nothing to export as PDF yet.' });
+      }
+      const pdfBuf = await generatePdfToolDocumentBuffer({
+        title,
+        subtitle,
+        actionLabel,
+        content: content.slice(0, 40000),
+      });
+      const safeName = title.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '') || 'AI_STUDENTS_Notes';
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`);
+      return res.send(pdfBuf);
+    } catch (error: any) {
+      console.error('PDF export error:', error);
+      return res.status(500).json({ error: error?.message || 'Failed to generate PDF download.' });
+    }
+  });
+
   // ---------------------------------------------------------------------------
   // HELP & SUPPORT, CONTACT DETAILS, FAQS, TICKETS & FEEDBACK APIs
   // ---------------------------------------------------------------------------
@@ -1063,6 +1193,500 @@ async function startServer() {
       return res.status(403).json({ error: 'Forbidden: Admin permission required.' });
     }
     return res.json({ branding: resetBrandBrandingConfig() });
+  });
+
+  // ---------------------------------------------------------------------------
+  // PDF STUDY LIBRARY, PREMIUM NOTES, TAX INVOICE & GUARDIAN PAYMENT GATEWAY
+  // ---------------------------------------------------------------------------
+  app.get('/api/pdf-library/config', (_req: Request, res: Response) => {
+    return res.json(getPublicGatewayConfig());
+  });
+
+  app.get('/api/pdf-library', (req: AuthRequest, res: Response) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.json({
+        items: listPdfCatalog(false),
+        unlockedPdfIds: [],
+        config: getPublicGatewayConfig(),
+      });
+    }
+    return requireAuth(req, res, () => {
+      const uid = req.principal!.uid;
+      const isAdmin = isAdminPrincipal(req.principal);
+      const entitlements = getStudentEntitlements(uid);
+      return res.json({
+        items: listPdfCatalog(isAdmin),
+        unlockedPdfIds: entitlements.map((e) => e.pdfId),
+        entitlements,
+        promoUnlocks: getStudentPromoUnlocks(uid),
+        orders: getStudentOrders(uid),
+        config: getPublicGatewayConfig(),
+      });
+    });
+  });
+
+  app.post('/api/pdf-library/:id/redeem-code', requireAuth, rateLimit(8, 60_000), (req: AuthRequest, res: Response) => {
+    const id = String(req.params.id || '').trim();
+    const item = getPdfItemById(id);
+    if (!item || !item.published) {
+      return res.status(404).json({ error: 'PDF study note not found.' });
+    }
+    if (item.availability !== 'available') {
+      return res.status(409).json({ error: 'This chapter PDF is Coming Soon and cannot be unlocked yet.' });
+    }
+    const uid = req.principal!.uid;
+    const code = String(req.body?.code || '');
+    const clientIp =
+      (typeof req.headers['x-forwarded-for'] === 'string'
+        ? req.headers['x-forwarded-for'].split(',')[0].trim()
+        : '') ||
+      req.ip ||
+      'unknown';
+
+    const result = redeemPdfPromoCode({
+      studentId: uid,
+      studentName: req.principal!.displayName || 'Student',
+      studentContact: req.principal!.email || uid,
+      clientIp,
+      pdf: item,
+      code,
+    });
+
+    if (result.ok === false) {
+      return res.status(result.status).json({
+        error: result.error,
+        locked: true,
+        remainingAttempts: result.remainingAttempts,
+        retryAfterSeconds: result.retryAfterSeconds,
+      });
+    }
+
+    return res.json({
+      unlocked: true,
+      alreadyUnlocked: Boolean(result.alreadyUnlocked),
+      unlockSource: 'promo_code',
+      entitlement: result.entitlement,
+      promoRecord: result.promoRecord,
+      message: result.alreadyUnlocked
+        ? 'This PDF is already unlocked on your account!'
+        : 'Free Access Code verified! Lifetime PDF access unlocked without payment.',
+    });
+  });
+
+  app.get('/api/pdf-library/:id/file', async (req: AuthRequest, res: Response) => {
+    const proceed = async () => {
+      try {
+        const id = String(req.params.id || '').trim();
+        const item = getPdfItemById(id);
+        const isAdmin = req.principal ? isAdminPrincipal(req.principal) : false;
+        if (!item || (!item.published && !isAdmin)) {
+          return res.status(404).json({ error: 'PDF study note not found.' });
+        }
+        if (item.availability === 'coming_soon') {
+          return res.status(409).json({
+            error: 'This chapter PDF is marked Coming Soon and is not available yet.',
+            comingSoon: true,
+          });
+        }
+
+        const uid = req.principal?.uid || '';
+        const unlocked = item.isFree || isAdmin || (uid ? hasStudentPdfAccess(uid, item.id) : false);
+        if (!unlocked) {
+          if (!req.principal) {
+            return res.status(401).json({
+              error: `Sign in to unlock this Premium PDF via ₹${item.priceInr} payment or Free Access Code.`,
+              locked: true,
+              priceInr: item.priceInr,
+            });
+          }
+          return res.status(402).json({
+            error: `Premium PDF is locked. Complete INR ${item.priceInr} server-verified payment to unlock lifetime access.`,
+            locked: true,
+            priceInr: item.priceInr,
+          });
+        }
+
+        const isDownload = req.query.download === '1';
+        if (isDownload && !item.allowDownload && !isAdmin) {
+          return res.status(403).json({ error: 'Download is disabled by administrator for this PDF.' });
+        }
+
+        let pdfBuffer: Buffer | null = null;
+        if (item.sourceType === 'uploaded' && item.storageFile) {
+          pdfBuffer = readUploadedPdfBinary(item);
+        }
+        if (!pdfBuffer) {
+          const mediumParam = String(req.query.medium || 'both');
+          const medium: 'en' | 'hi' | 'both' =
+            mediumParam === 'en' || mediumParam === 'hi' ? mediumParam : 'both';
+          pdfBuffer = await generateStudyNotePdfBuffer(item, medium);
+        }
+
+        const safeFilename = `${item.classId}_${item.subjectKey}_ch${item.chapterNumber}_${item.chapterTitleEn}`
+          .replace(/[^a-zA-Z0-9_-]+/g, '_')
+          .slice(0, 80);
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Length', String(pdfBuffer.length));
+        res.setHeader('Cache-Control', 'no-store, private');
+        res.setHeader(
+          'Content-Disposition',
+          `${isDownload ? 'attachment' : 'inline'}; filename="${safeFilename}.pdf"`
+        );
+        return res.send(pdfBuffer);
+      } catch (error: any) {
+        console.error('Serve PDF error:', error);
+        return res.status(500).json({ error: error?.message || 'Unable to load PDF document.' });
+      }
+    };
+
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      return requireAuth(req, res, () => {
+        void proceed();
+      });
+    }
+    return void proceed();
+  });
+
+  app.get('/api/pdf-payments/my', requireAuth, (req: AuthRequest, res: Response) => {
+    const uid = req.principal!.uid;
+    const entitlements = getStudentEntitlements(uid);
+    return res.json({
+      unlockedPdfIds: entitlements.map((e) => e.pdfId),
+      entitlements,
+      promoUnlocks: getStudentPromoUnlocks(uid),
+      orders: getStudentOrders(uid),
+      config: getPublicGatewayConfig(),
+    });
+  });
+
+  app.post('/api/pdf-payments/create-order', requireAuth, rateLimit(20, 60_000), async (req: AuthRequest, res: Response) => {
+    try {
+      const uid = req.principal!.uid;
+      const body = req.body || {};
+      const pdfId = String(body.pdfId || '').trim();
+      const paymentMethod = String(body.paymentMethod || 'upi_qr') as PdfPaymentMethod;
+
+      const allowedMethods: PdfPaymentMethod[] = [
+        'upi_qr',
+        'upi_id',
+        'upi_phone',
+        'razorpay_card',
+        'razorpay_netbanking',
+        'razorpay_upi',
+      ];
+      if (!allowedMethods.includes(paymentMethod)) {
+        return res.status(400).json({ error: 'Unsupported payment method.' });
+      }
+
+      const item = getPdfItemById(pdfId);
+      if (!item || !item.published || item.availability !== 'available') {
+        return res.status(404).json({ error: 'This chapter PDF is not available for purchase yet.' });
+      }
+      if (item.isFree) {
+        return res.json({ alreadyUnlocked: true, free: true });
+      }
+
+      const isGatewayMethod = paymentMethod.startsWith('razorpay_');
+      const keyId = (process.env.RAZORPAY_KEY_ID || '').trim();
+      const keySecret = (process.env.RAZORPAY_KEY_SECRET || '').trim();
+      if (isGatewayMethod && (!keyId || !keySecret)) {
+        return res.status(503).json({
+          error:
+            'Online Card / Net Banking gateway awaits Razorpay backend keys (RAZORPAY_KEY_ID & RAZORPAY_KEY_SECRET). Use Guardian-Verified UPI QR (7492996601@naviaxis) or UPI Phone (7492996601) below.',
+        });
+      }
+
+      const studentName =
+        typeof body.studentName === 'string' && body.studentName.trim()
+          ? body.studentName.trim()
+          : req.principal!.displayName || 'Student';
+      const studentContact =
+        typeof body.studentContact === 'string' && body.studentContact.trim()
+          ? body.studentContact.trim()
+          : req.principal!.email || req.principal!.uid;
+
+      const created = createOrReusePdfOrder({
+        studentId: uid,
+        studentName,
+        studentContact,
+        pdf: item,
+        paymentMethod,
+        paymentProvider: isGatewayMethod ? 'Razorpay' : 'Guardian UPI (7492996601@naviaxis)',
+      });
+
+      if (created.alreadyUnlocked) {
+        return res.json({ alreadyUnlocked: true });
+      }
+
+      let order = created.order!;
+      if (isGatewayMethod && keyId && keySecret && !order.gatewayOrderId) {
+        const authBasic = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+        const rpRes = await fetch('https://api.razorpay.com/v1/orders', {
+          method: 'POST',
+          headers: {
+            Authorization: `Basic ${authBasic}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            amount: Math.round(order.totalAmount * 100),
+            currency: 'INR',
+            receipt: order.orderNumber,
+            notes: { pdfId: item.id, studentId: uid },
+          }),
+        });
+        const rpData: any = await rpRes.json().catch(() => ({}));
+        if (!rpRes.ok || !rpData.id) {
+          return res.status(502).json({
+            error: rpData?.error?.description || 'Could not initialize online payment gateway order.',
+          });
+        }
+        order = attachGatewayOrderId(order.id, String(rpData.id)) || order;
+      }
+
+      return res.status(201).json({
+        order,
+        gatewayConfig: getPublicGatewayConfig(),
+      });
+    } catch (error: any) {
+      console.error('Create PDF order error:', error);
+      return res.status(500).json({ error: error?.message || 'Unable to create payment order.' });
+    }
+  });
+
+  app.post('/api/pdf-payments/submit-upi-proof', requireAuth, rateLimit(15, 60_000), (req: AuthRequest, res: Response) => {
+    const body = req.body || {};
+    const orderId = String(body.orderId || '').trim();
+    const utrNumber = String(body.utrNumber || '').trim();
+    const payerName = typeof body.payerName === 'string' ? body.payerName : undefined;
+    const guardianConfirmed = Boolean(body.guardianConfirmed);
+
+    const result = submitUpiPaymentProof({
+      orderId,
+      studentId: req.principal!.uid,
+      utrNumber,
+      payerName,
+      guardianConfirmed,
+    });
+
+    if (result.ok === false) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    return res.json({
+      order: result.order,
+      locked: true,
+      message:
+        'UPI Reference submitted! Your PDF will unlock automatically as soon as the Guardian / Server Admin verifies this transaction.',
+    });
+  });
+
+  app.post('/api/pdf-payments/verify-gateway', requireAuth, rateLimit(20, 60_000), (req: AuthRequest, res: Response) => {
+    const body = req.body || {};
+    const result = verifyGatewaySignatureAndUnlock({
+      orderId: String(body.orderId || '').trim(),
+      studentId: req.principal!.uid,
+      razorpayOrderId: String(body.razorpayOrderId || '').trim(),
+      razorpayPaymentId: String(body.razorpayPaymentId || '').trim(),
+      razorpaySignature: String(body.razorpaySignature || '').trim(),
+    });
+    if (result.ok === false) {
+      return res.status(result.status).json({ error: result.error, locked: true });
+    }
+    return res.json({
+      verified: true,
+      order: result.order,
+      entitlement: result.entitlement,
+    });
+  });
+
+  app.get('/api/pdf-payments/invoice/:orderId/pdf', requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+      const order = getOrderById(String(req.params.orderId || '').trim());
+      if (!order) {
+        return res.status(404).json({ error: 'Invoice order not found.' });
+      }
+      if (order.studentId !== req.principal!.uid && !isAdminPrincipal(req.principal)) {
+        return res.status(403).json({ error: 'Forbidden: Cannot access another student’s tax invoice.' });
+      }
+      if (order.paymentStatus !== 'verified') {
+        return res.status(409).json({ error: 'Tax Invoice is only issued after payment is verified.' });
+      }
+      const buf = await generateTaxInvoicePdfBuffer(order, getPublicGatewayConfig().taxConfig);
+      const fname = (order.invoiceNumber || order.orderNumber).replace(/[^a-zA-Z0-9_-]+/g, '_');
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Length', String(buf.length));
+      res.setHeader('Cache-Control', 'no-store, private');
+      res.setHeader('Content-Disposition', `attachment; filename="${fname}.pdf"`);
+      return res.send(buf);
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'Unable to generate tax invoice PDF.' });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // ADMIN PDF LIBRARY, PAYMENT VERIFICATION & ENTITLEMENT CONTROLS
+  // ---------------------------------------------------------------------------
+  app.get('/api/admin/pdf-library', requireAuth, (req: AuthRequest, res: Response) => {
+    if (!isStaffPrincipal(req.principal)) {
+      return res.status(403).json({ error: 'Forbidden: Staff permission required.' });
+    }
+    return res.json({
+      items: listPdfCatalog(true),
+      orders: getAllOrders(),
+      entitlements: getAllEntitlements(),
+      promoUnlocks: getAllPromoUnlocks(),
+      config: getPublicGatewayConfig(),
+    });
+  });
+
+  app.put('/api/admin/pdf-library', requireAuth, (req: AuthRequest, res: Response) => {
+    if (!isStaffPrincipal(req.principal)) {
+      return res.status(403).json({ error: 'Forbidden: Admin or Content Manager permission required.' });
+    }
+    const body = req.body || {};
+    const classId = (['class_10', 'class_11', 'class_12'].includes(body.classId)
+      ? body.classId
+      : 'class_10') as PdfClassId;
+    const streamId = (['na', 'science', 'commerce', 'arts'].includes(body.streamId)
+      ? body.streamId
+      : classId === 'class_10'
+      ? 'na'
+      : 'science') as PdfStreamId;
+    const subjectNameEn = String(body.subjectNameEn || '').trim();
+    const chapterTitleEn = String(body.chapterTitleEn || '').trim();
+    if (!subjectNameEn || !chapterTitleEn) {
+      return res.status(400).json({ error: 'Subject name and chapter title are required.' });
+    }
+    const subjectKey =
+      String(body.subjectKey || '').trim() ||
+      subjectNameEn
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_|_$/g, '');
+
+    const saved = upsertPdfItem(
+      {
+        ...(typeof body.id === 'string' && body.id.trim() ? { id: body.id.trim() } : {}),
+        classId,
+        streamId,
+        boardId: String(body.boardId || 'all'),
+        subjectKey,
+        subjectNameEn,
+        subjectNameHi: String(body.subjectNameHi || subjectNameEn).trim(),
+        chapterNumber: Number(body.chapterNumber) || 1,
+        chapterTitleEn,
+        chapterTitleHi: String(body.chapterTitleHi || chapterTitleEn).trim(),
+        availability: body.availability === 'coming_soon' ? 'coming_soon' : 'available',
+        isFree: Boolean(body.isFree),
+        priceInr: body.isFree ? 0 : Math.max(1, Number(body.priceInr) || 19),
+        allowDownload: body.allowDownload !== false,
+        allowPrint: body.allowPrint !== false,
+        mediumSupport:
+          body.mediumSupport === 'hindi' || body.mediumSupport === 'english'
+            ? body.mediumSupport
+            : 'bilingual',
+        published: body.published !== false,
+        ...(body.content && typeof body.content === 'object' ? { content: body.content } : {}),
+      },
+      req.principal!.email || req.principal!.uid
+    );
+    return res.json({ item: saved, items: listPdfCatalog(true) });
+  });
+
+  app.post(
+    '/api/admin/pdf-library/:id/upload',
+    express.json({ limit: '24mb' }),
+    requireAuth,
+    (req: AuthRequest, res: Response) => {
+      if (!isStaffPrincipal(req.principal)) {
+        return res.status(403).json({ error: 'Forbidden: Staff permission required.' });
+      }
+      try {
+        const pdfId = String(req.params.id || '').trim();
+        const dataUrl = String(req.body?.dataUrl || '');
+        if (!dataUrl) {
+          return res.status(400).json({ error: 'PDF file payload is missing.' });
+        }
+        const saved = saveUploadedPdfBinary(
+          pdfId,
+          dataUrl,
+          req.principal!.email || req.principal!.uid
+        );
+        return res.json({ item: saved, items: listPdfCatalog(true) });
+      } catch (error: any) {
+        return res.status(400).json({ error: error?.message || 'Unable to upload PDF binary.' });
+      }
+    }
+  );
+
+  app.delete('/api/admin/pdf-library/:id', requireAuth, (req: AuthRequest, res: Response) => {
+    if (!isAdminPrincipal(req.principal)) {
+      return res.status(403).json({ error: 'Forbidden: Only Admin can delete study PDFs.' });
+    }
+    const ok = deletePdfItemById(String(req.params.id || '').trim());
+    if (!ok) return res.status(404).json({ error: 'PDF entry not found.' });
+    return res.json({ ok: true, items: listPdfCatalog(true) });
+  });
+
+  app.put('/api/admin/pdf-payments/tax-config', requireAuth, (req: AuthRequest, res: Response) => {
+    if (!isAdminPrincipal(req.principal)) {
+      return res.status(403).json({ error: 'Forbidden: Only Admin can modify tax or gateway settings.' });
+    }
+    const updated = updateTaxConfig(req.body || {}, req.principal!.email || req.principal!.uid);
+    return res.json({ taxConfig: updated, config: getPublicGatewayConfig() });
+  });
+
+  app.post('/api/admin/pdf-payments/:orderId/decision', requireAuth, (req: AuthRequest, res: Response) => {
+    if (!isAdminPrincipal(req.principal)) {
+      return res.status(403).json({ error: 'Forbidden: Only Admin/Guardian verifier can verify payments.' });
+    }
+    const decision = req.body?.decision === 'fail' ? 'fail' : 'verify';
+    const result = adminDecidePdfOrder({
+      orderId: String(req.params.orderId || '').trim(),
+      decision,
+      actor: req.principal!.email || req.principal!.displayName || 'Admin',
+      reason: typeof req.body?.reason === 'string' ? req.body.reason : undefined,
+    });
+    if (result.ok === false) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    return res.json({
+      order: result.order,
+      entitlement: result.entitlement,
+      orders: getAllOrders(),
+      entitlements: getAllEntitlements(),
+    });
+  });
+
+  app.post('/api/admin/pdf-payments/grant-access', requireAuth, (req: AuthRequest, res: Response) => {
+    if (!isAdminPrincipal(req.principal)) {
+      return res.status(403).json({ error: 'Forbidden: Admin permission required.' });
+    }
+    const body = req.body || {};
+    const pdf = getPdfItemById(String(body.pdfId || '').trim());
+    const studentId = String(body.studentId || '').trim();
+    if (!pdf || !studentId) {
+      return res.status(400).json({ error: 'Valid studentId and pdfId are required.' });
+    }
+    const ent = adminGrantPdfAccessManual({
+      studentId,
+      studentName: String(body.studentName || studentId),
+      studentContact: String(body.studentContact || studentId),
+      pdf,
+      actor: req.principal!.email || 'Admin',
+    });
+    return res.json({ entitlement: ent, entitlements: getAllEntitlements() });
+  });
+
+  app.delete('/api/admin/pdf-payments/entitlements/:id', requireAuth, (req: AuthRequest, res: Response) => {
+    if (!isAdminPrincipal(req.principal)) {
+      return res.status(403).json({ error: 'Forbidden: Admin permission required.' });
+    }
+    const ok = adminRevokePdfAccess(String(req.params.id || '').trim());
+    if (!ok) return res.status(404).json({ error: 'Entitlement record not found.' });
+    return res.json({ ok: true, entitlements: getAllEntitlements() });
   });
 
   // Modular Payment Verification Endpoint (Disabled unless configured by owner)

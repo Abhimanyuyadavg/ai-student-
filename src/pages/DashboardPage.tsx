@@ -15,6 +15,7 @@ import { useApp } from '../context/AppContext.tsx';
 import { CurriculumStatusText } from '../components/StatusText.tsx';
 import { BrandLogo } from '../components/BrandLogo.tsx';
 import { HomeBannerCarousel } from '../components/HomeBannerCarousel.tsx';
+import { HomePdfToolsSection } from '../components/HomePdfToolsSection.tsx';
 
 export const DashboardPage: React.FC = () => {
   const {
@@ -147,7 +148,10 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      {/* Header Welcome with Official Brand Logo */}
+      {/* 1. PDF TOOLS — Primary Top Section on Home Screen */}
+      <HomePdfToolsSection />
+
+      {/* 2. Header Welcome with Official Brand Logo & AI Teacher Quick Launch */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-6">
         <div className="space-y-2">
           <BrandLogo size="md" subtitle="Official Study Workspace" />

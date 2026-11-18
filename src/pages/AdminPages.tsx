@@ -7,6 +7,7 @@ import {
   Download,
   FileCheck,
   FileQuestion,
+  FileText,
   Image as ImageIcon,
   LifeBuoy,
   Pencil,
@@ -20,6 +21,7 @@ import { useApp } from '../context/AppContext.tsx';
 import { CurriculumStatusText, PriorityText } from '../components/StatusText.tsx';
 import { AuthImage, UploadPickerControls, ZoomableAuthThumbnail } from '../components/ImageTools.tsx';
 import { AdminBannersSection } from '../components/AdminBannersSection.tsx';
+import { AdminPdfLibrarySection } from '../components/AdminPdfLibrarySection.tsx';
 import { validateAndCompressImageFile } from '../lib/imageUtils.ts';
 import {
   AcademicSession,
@@ -114,6 +116,7 @@ export const AdminConsolePage: React.FC = () => {
     { id: 'admin-questions', label: 'Question Bank & PYQs', icon: FileQuestion },
     { id: 'admin-verification', label: 'Content Verification', icon: FileCheck },
     { id: 'admin-banners', label: 'Branding & Home Screen Banners', icon: ImageIcon },
+    { id: 'admin-pdf-library', label: 'PDF Library & Payments', icon: FileText },
     { id: 'admin-support', label: 'Help & Support Desk', icon: LifeBuoy },
     { id: 'admin-payments', label: 'Payments & Settings', icon: CreditCard },
   ];
@@ -265,6 +268,8 @@ export const AdminConsolePage: React.FC = () => {
       )}
 
       {currentPage === 'admin-banners' && <AdminBannersSection isAdmin={isAdmin} />}
+
+      {currentPage === 'admin-pdf-library' && <AdminPdfLibrarySection isAdmin={isAdmin} />}
 
       {currentPage === 'admin-support' && <AdminSupportDeskSection isAdmin={isAdmin} />}
 

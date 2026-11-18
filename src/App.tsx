@@ -102,6 +102,7 @@ const PageRouter: React.FC = () => {
     case 'admin-questions':
     case 'admin-verification':
     case 'admin-banners':
+    case 'admin-pdf-library':
     case 'admin-payments':
     case 'admin-support':
       return <AdminConsolePage />;

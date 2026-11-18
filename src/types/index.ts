@@ -589,6 +589,7 @@ export type AppPage =
   | 'admin-questions'
   | 'admin-verification'
   | 'admin-banners'
+  | 'admin-pdf-library'
   | 'admin-payments'
   | 'admin-support';
 
@@ -607,4 +608,160 @@ export interface AiChatMessage {
   timestamp: string;
   attachments?: AiImageAttachment[];
 }
+
+export type PdfAvailability = 'available' | 'coming_soon';
+export type PdfMedium = 'bilingual' | 'hindi' | 'english';
+export type PdfClassId = 'class_10' | 'class_11' | 'class_12';
+export type PdfStreamId = 'na' | 'science' | 'commerce' | 'arts';
+
+export interface PdfStudyLangSection {
+  overview: string;
+  definitions: { term: string; meaning: string }[];
+  formulas: { name: string; expression: string; usage: string }[];
+  examNotes: string[];
+  importantQA: { question: string; answer: string; marks: number }[];
+  mcqs: { question: string; options: string[]; answerIndex: number; explanation: string }[];
+}
+
+export interface PdfChapterContent {
+  en: PdfStudyLangSection;
+  hi: PdfStudyLangSection;
+}
+
+export interface PdfNoteItem {
+  id: string;
+  classId: PdfClassId;
+  streamId: PdfStreamId;
+  boardId: string;
+  subjectKey: string;
+  subjectNameEn: string;
+  subjectNameHi: string;
+  chapterNumber: number;
+  chapterTitleEn: string;
+  chapterTitleHi: string;
+  chapterIdRef?: string;
+  subjectIdRef?: string;
+  availability: PdfAvailability;
+  isFree: boolean;
+  priceInr: number;
+  allowDownload: boolean;
+  allowPrint: boolean;
+  mediumSupport: PdfMedium;
+  sourceType: 'generated' | 'uploaded';
+  storageFile?: string;
+  fileSizeBytes?: number;
+  pageCount?: number;
+  published: boolean;
+  content?: PdfChapterContent;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PdfPaymentMethod =
+  | 'upi_qr'
+  | 'upi_id'
+  | 'upi_phone'
+  | 'razorpay_card'
+  | 'razorpay_netbanking'
+  | 'razorpay_upi';
+
+export type PdfPaymentStatus =
+  | 'pending'
+  | 'awaiting_verification'
+  | 'verified'
+  | 'failed';
+
+export interface PdfTaxConfig {
+  taxEnabled: boolean;
+  gstRatePercent: number; // e.g., 0, 5, 12, 18 (real statutory GST %)
+  taxMode: 'inclusive' | 'exclusive';
+  sellerLegalName: string;
+  sellerGstin: string;
+  sellerState: string;
+  sacHsnCode: string; // e.g., 4901 / 998431 Digital Educational Notes
+  upiId: string;
+  supportPhone: string;
+  upiQrImageUrl: string;
+  updatedBy?: string;
+  updatedAt: string;
+}
+
+export interface PdfPaymentOrder {
+  id: string;
+  orderNumber: string;
+  invoiceNumber?: string;
+  studentId: string;
+  studentName: string;
+  studentContact: string;
+  pdfId: string;
+  pdfTitle: string;
+  classId: PdfClassId;
+  subjectName: string;
+  baseAmount: number;
+  taxRatePercent: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  taxMode: 'inclusive' | 'exclusive';
+  currency: 'INR';
+  paymentMethod: PdfPaymentMethod;
+  paymentProvider: string;
+  gatewayOrderId?: string;
+  gatewayPaymentId?: string;
+  utrNumber?: string;
+  payerName?: string;
+  guardianConfirmed?: boolean;
+  paymentStatus: PdfPaymentStatus;
+  failureReason?: string;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PdfUnlockSource = 'payment' | 'promo_code' | 'admin_grant';
+
+export interface PdfEntitlement {
+  id: string;
+  studentId: string;
+  studentName?: string;
+  studentContact?: string;
+  pdfId: string;
+  pdfTitle?: string;
+  classId?: PdfClassId;
+  subjectName?: string;
+  unlockSource?: PdfUnlockSource;
+  orderId: string;
+  invoiceNumber: string;
+  amountPaid: number;
+  unlockedAt: string;
+}
+
+export interface PdfPromoUnlockRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentContact: string;
+  pdfId: string;
+  pdfTitle: string;
+  classId: PdfClassId;
+  subjectName: string;
+  unlockType: 'free_access_code';
+  codeMask: string;
+  unlockedAt: string;
+}
+
+export interface PaymentGatewayPublicConfig {
+  guardianMerchantName: string;
+  upiId: string;
+  supportPhone: string;
+  upiQrImageUrl: string;
+  razorpayConfigured: boolean;
+  razorpayKeyId?: string;
+  promoCodeEnabled: boolean;
+  taxConfig: PdfTaxConfig;
+}
+
 

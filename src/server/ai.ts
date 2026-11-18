@@ -547,3 +547,84 @@ Return 14 realistic study tasks spread across days 0..6 (dayOffset 0 to 6), keep
 
   return JSON.parse((response.text || '{"summaryNote":"","tasks":[]}').trim());
 }
+
+export async function generatePdfToolResult(params: {
+  action: 'notes' | 'summarize' | 'translate';
+  text: string;
+  title?: string;
+  targetLanguage?: 'English' | 'Hindi' | 'Hindi + English';
+  style?: string;
+}): Promise<string> {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is not configured on the server.');
+  }
+
+  const cleanText = params.text.trim().slice(0, 18000);
+  const lang = params.targetLanguage || 'Hindi + English';
+  const docTitle = params.title || 'Study PDF Document';
+
+  let taskPrompt = '';
+  if (params.action === 'notes') {
+    taskPrompt = `Convert the following PDF study content into crisp, structured, exam-ready Study Notes in ${lang}.
+Include clearly labeled sections:
+1. Key Concepts & Overview
+2. Important Definitions
+3. Key Formulas / Rules / Dates (if present in text)
+4. Bullet-Point Revision Notes
+5. Likely 2-Mark & 5-Mark Board Exam Questions with Brief Key Points
+
+Do NOT invent unrelated syllabus claims outside the provided document text.`;
+  } else if (params.action === 'summarize') {
+    const modeNote =
+      params.style === 'quick'
+        ? 'Keep it concise and ultra-scannable (quick 2-minute revision).'
+        : params.style === 'formulas'
+        ? 'Focus heavily on definitions, rules, equations, formulas, and key exam points.'
+        : 'Provide a clear section-by-section detailed yet easy-to-understand summary.';
+    taskPrompt = `Summarize the following PDF document clearly in ${lang} so a Class 10–12 student can understand every point easily.
+${modeNote}
+Organize cleanly with headings, bullet points, and a short "Quick Exam Takeaways" section at the end.`;
+  } else {
+    const direction =
+      lang === 'Hindi'
+        ? 'Translate the text cleanly and accurately into natural Hindi (Devanagari script), retaining standard scientific/mathematical terms in parentheses where helpful.'
+        : lang === 'English'
+        ? 'Translate the text cleanly and accurately into clear, natural academic English.'
+        : 'Provide a clear bilingual English + Hindi (हिंदी) translation with parallel paragraphs or numbered points so students understand both languages.';
+    taskPrompt = `${direction}
+Preserve numbers, formulas, headings, and meaning faithfully without omitting content.`;
+  }
+
+  const contents = `Document Title: ${docTitle}\n\n${taskPrompt}\n\n--- EXTRACTED PDF TEXT ---\n${cleanText}`;
+  const systemInstruction =
+    'You are a careful academic study assistant for Indian school students (Class 10, 11, 12). Output clean, readable plain text with numbered headings and clear bullet points (avoid broken HTML tags). Base output strictly on the provided PDF text.';
+
+  let response;
+  try {
+    response = await withRetry(() =>
+      ai.models.generateContent({
+        model: MODEL_NAME,
+        contents,
+        config: { systemInstruction },
+      }),
+      2
+    );
+  } catch (err: any) {
+    const status = err?.status || err?.code;
+    if (status === 503 || status === 429 || status === 500) {
+      response = await withRetry(() =>
+        ai.models.generateContent({
+          model: 'gemini-3.1-flash-lite',
+          contents,
+          config: { systemInstruction },
+        }),
+        2
+      );
+    } else {
+      throw err;
+    }
+  }
+
+  return (response.text || '').trim();
+}
+

@@ -1,0 +1,1288 @@
+🎓 AI STUDENTS – COMPLETE EDUCATION PLATFORM
+
+MASTER APP BUILDER IMPLEMENTATION PROMPT
+
+You are a senior full-stack developer, AI engineer, database architect, UI/UX designer, and education technology specialist.
+
+Your task is to build a complete, production-ready educational application named AI STUDENTS.
+
+Do not build just a demo, landing page, or static UI. Build a fully functional application with real authentication, database integration, AI-powered teaching, examination preparation, student progress tracking, and admin management.
+
+All buttons, menus, forms, tests, dashboards, and features must work correctly.
+
+==================================================
+
+1. APP IDENTITY AND MAIN OBJECTIVE
+   ==================================================
+
+App Name: AI STUDENTS
+
+App Category: AI Education & Exam Preparation Platform
+
+Main Purpose:
+
+Provide complete AI-powered education and examination preparation for students of:
+
+- Class 10
+- Class 11
+- Class 12
+
+Supported education boards:
+
+- Bihar Board (BSEB)
+- CBSE
+- ICSE
+- Other supported State Boards
+
+Support multiple academic sessions, including 2026–27 and future sessions.
+
+Important: Only show a board, subject, syllabus, or examination pattern as officially verified when its source has actually been checked. Do not assume all boards use the same curriculum.
+
+==================================================
+2. USER ROLES
+
+Create three main user roles.
+
+A. STUDENT
+
+Students can:
+
+- Register and log in.
+- Select their class and board.
+- Select their academic session.
+- Select their stream where applicable.
+- Select subjects.
+- Access AI Teacher.
+- Study chapters.
+- Download permitted study materials.
+- Take chapter tests.
+- Take mock examinations.
+- View marks and progress.
+- Create a personal study timetable.
+- Access revision notes.
+- View previous test results.
+
+B. ADMIN
+
+Admin can:
+
+- Manage students.
+- Manage classes and boards.
+- Manage subjects and chapters.
+- Upload verified syllabus documents.
+- Upload question papers and model papers.
+- Manage study materials.
+- Manage AI prompts.
+- Manage announcements.
+- Manage subscriptions and payment records if enabled.
+- View platform analytics.
+- Manage user reports.
+- Manage content quality.
+
+C. CONTENT MANAGER / TEACHER
+
+Authorized content managers can:
+
+- Create chapters.
+- Add questions and answers.
+- Upload notes.
+- Verify previous-year questions.
+- Add model papers.
+- Review AI-generated educational content.
+- Publish or unpublish educational materials.
+
+Use role-based access control. Students must never access admin-only data or functions.
+
+==================================================
+3. STUDENT REGISTRATION AND ONBOARDING
+
+Create a clean registration and onboarding system.
+
+Registration fields:
+
+- Student name or display name.
+- Email or mobile number.
+- Password.
+- Confirm password.
+- Optional profile photo.
+- Age confirmation and applicable guardian consent flow.
+
+After registration, ask:
+
+1. Select Class:
+   
+   - Class 10
+   - Class 11
+   - Class 12
+
+2. Select Board:
+   
+   - Bihar Board
+   - CBSE
+   - ICSE
+   - Other supported State Boards
+
+3. Select Academic Session.
+
+4. Select Stream:
+   
+   - Science
+   - Commerce
+   - Arts
+   - Not applicable for Class 10
+
+5. Select Medium:
+   
+   - Hindi
+   - English
+   - Hindi + English
+
+6. Select Subjects.
+
+7. Enter examination goal:
+   
+   - 60%+
+   - 70%+
+   - 80%+
+   - 90%+
+   - Custom target
+
+8. Select current preparation level:
+   
+   - Beginner
+   - Intermediate
+   - Advanced
+
+9. Select weak subjects.
+
+10. Select available daily study hours.
+
+Save all onboarding details to the student profile.
+
+Allow students to update their preferences later.
+
+==================================================
+4. COMPLETE EDUCATION CURRICULUM SYSTEM
+
+Create a dynamic curriculum database.
+
+Structure:
+
+Board
+→ Academic Session
+→ Class
+→ Stream
+→ Subject
+→ Unit
+→ Chapter
+→ Topic
+→ Learning Material
+
+Every curriculum item must support:
+
+- Chapter name.
+- Chapter number.
+- Chapter introduction.
+- Learning objectives.
+- Important definitions.
+- Important concepts.
+- Formulas.
+- Examples.
+- Diagrams.
+- Notes.
+- MCQs.
+- Short-answer questions.
+- Long-answer questions.
+- Previous-year questions.
+- Practice exercises.
+- Chapter test.
+
+Allow different syllabuses for different boards and academic sessions.
+
+Do not hardcode one syllabus for every board.
+
+Provide a curriculum status:
+
+- Verified Official
+- Under Review
+- Unverified
+- Archived
+
+Only verified official material should be labeled as official.
+
+==================================================
+5. CLASS 10 SUBJECT MANAGEMENT
+
+Support subjects according to the selected board and curriculum.
+
+Common subjects may include:
+
+- Mathematics
+- Science
+- Social Science
+- Hindi
+- English
+- Sanskrit
+- Other approved language subjects
+
+For Bihar Board, configure the relevant prescribed textbooks, chapters, language subjects, and examination structure separately.
+
+==================================================
+6. CLASS 11 SUBJECT MANAGEMENT
+
+Provide stream selection.
+
+SCIENCE:
+
+- Physics
+- Chemistry
+- Mathematics
+- Biology
+- English
+- Hindi
+- Other board-approved subjects
+
+COMMERCE:
+
+- Accountancy
+- Business Studies
+- Economics
+- Mathematics
+- English
+- Hindi
+- Other board-approved subjects
+
+ARTS:
+
+- History
+- Geography
+- Political Science
+- Economics
+- Sociology
+- Psychology
+- Hindi
+- English
+- Other board-approved subjects
+
+Allow students to choose combinations according to their board.
+
+==================================================
+7. CLASS 12 SUBJECT MANAGEMENT
+
+Provide Science, Commerce, and Arts streams.
+
+Support chapter-wise curriculum, practical subjects, project work, internal assessment, and theory examinations where applicable.
+
+The actual subject combinations and marks distribution must come from the selected board's verified curriculum.
+
+==================================================
+8. AI PERSONAL TEACHER SYSTEM
+
+Build an intelligent AI Teacher.
+
+The AI Teacher should know the student's:
+
+- Class.
+- Board.
+- Academic session.
+- Stream.
+- Subjects.
+- Selected medium.
+- Completed chapters.
+- Weak topics.
+- Test performance.
+- Learning progress.
+
+The AI Teacher must teach according to the student's actual curriculum.
+
+Teaching workflow:
+
+STEP 1: Explain the chapter introduction.
+
+STEP 2: Explain the entire chapter topic by topic.
+
+STEP 3: Explain definitions and important concepts.
+
+STEP 4: Give examples.
+
+STEP 5: Explain difficult topics in simpler language.
+
+STEP 6: Provide important questions.
+
+STEP 7: Give practice exercises.
+
+STEP 8: Conduct a chapter test.
+
+STEP 9: Analyze mistakes.
+
+STEP 10: Recommend revision.
+
+Teaching rules:
+
+- Explain in easy language.
+- Use Hindi, English, or bilingual explanations as selected.
+- Never invent official syllabus information.
+- Never invent previous-year question history.
+- Distinguish actual past questions from predicted questions.
+- Explain why an answer is correct.
+- Adapt difficulty to the student's performance.
+- Avoid unnecessary repetition.
+- Never promise guaranteed examination marks.
+
+==================================================
+9. SUBJECT-SPECIFIC AI TEACHING
+
+MATHEMATICS:
+
+- Formula explanations.
+- Step-by-step solutions.
+- Worked examples.
+- Numerical practice.
+- Theorem explanations.
+- Common mistakes.
+- Formula revision sheets.
+
+SCIENCE:
+
+- Physics, Chemistry, Biology.
+- Definitions.
+- Scientific principles.
+- Chemical equations.
+- Numerical problems.
+- Diagrams.
+- Experiments and practical concepts.
+
+SOCIAL SCIENCE:
+
+- History.
+- Geography.
+- Political Science.
+- Economics.
+- Important dates and events.
+- Causes and effects.
+- Maps and diagrams.
+- Short and long answers.
+
+HINDI:
+
+- Chapter explanations.
+- Author introductions.
+- Summary.
+- Poetry explanations.
+- Grammar.
+- Writing skills.
+- Important questions.
+
+ENGLISH:
+
+- Prose and poetry.
+- Chapter summaries.
+- Hindi meanings.
+- Correct English answers.
+- Grammar.
+- Vocabulary.
+- Reading comprehension.
+- Writing skills.
+
+SANSKRIT:
+
+- Sanskrit chapter explanations.
+- Hindi translations.
+- Word meanings.
+- Grammar.
+- Sandhi and Samas.
+- Shloka explanations.
+- Sanskrit question-answer practice.
+
+For Classes 11 and 12, dynamically adapt subjects and topics to the selected curriculum.
+
+==================================================
+10. PREVIOUS YEAR QUESTION ANALYSIS
+
+Build a Previous Year Question Bank.
+
+Store:
+
+- Question text.
+- Board.
+- Class.
+- Academic session.
+- Subject.
+- Chapter.
+- Question type.
+- Marks.
+- Examination year.
+- Paper source.
+- Source document.
+- Verification status.
+
+Question types:
+
+- MCQ.
+- Very short answer.
+- Short answer.
+- Long answer.
+- Numerical.
+- Practical.
+- Case-based questions where applicable.
+
+Question verification rules:
+
+1. A question must be linked to an actual paper or verified source before being labeled a Previous Year Question.
+2. Store the examination year and paper reference.
+3. Count only verified appearances.
+4. Do not invent missing years.
+5. Distinguish official model papers from actual board examination papers.
+6. Clearly identify predicted questions.
+
+Display:
+
+- Number of verified appearances.
+- Verified years.
+- Chapter name.
+- Question type.
+- Marks.
+- Priority.
+- Source.
+
+==================================================
+11. QUESTION PRIORITY SYSTEM
+
+Create three priority levels:
+
+RED: Very Important.
+
+YELLOW: Important.
+
+GREEN: Additional Practice.
+
+Priority must be based on:
+
+- Official syllabus.
+- Exam blueprint.
+- Verified previous papers.
+- Official model papers.
+- Topic importance.
+- Learning objectives.
+
+Do not claim that any predicted question is guaranteed to appear.
+
+==================================================
+12. COMPLETE CHAPTER LEARNING MODULE
+
+Every chapter should have the following sections:
+
+1. Chapter Introduction.
+2. Complete Explanation.
+3. Important Definitions.
+4. Important Facts.
+5. Formulas.
+6. Examples.
+7. Important MCQs.
+8. Short Questions.
+9. Long Questions.
+10. Verified Previous Year Questions.
+11. Expected Questions.
+12. Revision Notes.
+13. Practice Test.
+
+Default question counts:
+
+- 20 MCQs.
+- 10 short-answer questions.
+- 5 long-answer questions.
+
+Allow dynamic question counts according to the chapter and official exam pattern.
+
+Students should study one chapter at a time, with the option to move forward after completing the chapter or choosing to revise.
+
+==================================================
+13. SMART MCQ TEST ENGINE
+
+Create an interactive MCQ testing system.
+
+Features:
+
+- One question at a time.
+- Four options where appropriate.
+- Submit Answer button.
+- Next Question button.
+- Previous Question navigation in full tests.
+- Question timer when required.
+- Correct answer explanation.
+- Wrong answer explanation.
+- Score calculation.
+- Accuracy percentage.
+- Topic-wise performance.
+
+For chapter learning mode:
+
+Ask one question and wait for the student's answer.
+
+After submission:
+
+- Show correct or incorrect.
+- Explain the answer.
+- Move to the next question.
+
+For exam mode:
+
+- Do not reveal answers until the test is submitted.
+
+Prevent duplicate question IDs in the same test unless intentionally configured.
+
+==================================================
+14. WRITTEN TEST SYSTEM
+
+Create short-answer and long-answer assessment.
+
+Allow students to:
+
+- Type answers.
+- Submit answers.
+- View model answers.
+- Compare their answers.
+- Receive AI feedback.
+- See missing key points.
+- Improve answer structure.
+
+Use marking rubrics based on the selected board's verified marking scheme.
+
+AI evaluation should be presented as an estimate, not an official board result.
+
+==================================================
+15. FULL MOCK EXAM SYSTEM
+
+Create board-style mock examinations.
+
+Features:
+
+- Board-specific examination pattern.
+- Correct marks distribution.
+- Question sections.
+- Exam timer.
+- Answer navigation.
+- Auto-save.
+- Submit confirmation.
+- Result calculation.
+- Detailed answer key.
+- Performance analysis.
+- Weak-topic detection.
+
+Do not assume that all boards use the same examination duration or question pattern.
+
+Use verified official examination blueprints wherever available.
+
+==================================================
+16. PERSONAL STUDY PLANNER
+
+Create a personalized timetable generator.
+
+Collect:
+
+- Examination date.
+- Daily study hours.
+- School schedule.
+- Coaching schedule.
+- Completed syllabus.
+- Remaining syllabus.
+- Weak subjects.
+- Target marks.
+
+Generate:
+
+- Daily timetable.
+- Weekly timetable.
+- Chapter completion dates.
+- Revision dates.
+- Test dates.
+- Model paper dates.
+- Final revision plan.
+
+Support 30-day, 60-day, 90-day, and custom study plans.
+
+Allow students to edit their timetable.
+
+Show completed, pending, and overdue tasks.
+
+Do not create unrealistic study schedules.
+
+==================================================
+17. REVISION AND MEMORY SYSTEM
+
+Create a smart revision engine.
+
+Revision methods:
+
+- First revision: Understand.
+- Second revision: Recall without notes.
+- Third revision: Write answers.
+- Fourth revision: Correct mistakes.
+- Spaced revision: Repeat at suitable intervals.
+
+Provide:
+
+- Important formula sheets.
+- Definition lists.
+- Quick revision notes.
+- Flashcards.
+- Weak-topic revision.
+- Previously incorrect questions.
+
+Schedule revision based on student performance.
+
+==================================================
+18. STUDENT DASHBOARD
+
+Build a modern dashboard.
+
+Display:
+
+- Welcome message.
+- Selected class.
+- Board.
+- Academic session.
+- Stream.
+- Today's study tasks.
+- Continue Learning.
+- Completed chapters.
+- Remaining chapters.
+- Total tests.
+- Average score.
+- Study streak.
+- Weak subjects.
+- Upcoming mock tests.
+- Recent results.
+
+Add clear navigation to all major learning features.
+
+==================================================
+19. PROGRESS ANALYTICS
+
+Track:
+
+- Chapter completion.
+- Topic mastery.
+- MCQ accuracy.
+- Written answer performance.
+- Subject-wise marks.
+- Mock exam results.
+- Revision history.
+- Time spent studying.
+- Improvement over time.
+
+Use visual charts and simple progress indicators.
+
+Give recommendations such as:
+
+"Your Mathematics performance is improving."
+
+"Revise the chapters where your accuracy is low."
+
+Never shame or negatively label students.
+
+==================================================
+20. NOTES AND STUDY MATERIAL LIBRARY
+
+Create a study library.
+
+Categories:
+
+- Textbook notes.
+- Chapter summaries.
+- Formula sheets.
+- Important questions.
+- Model papers.
+- Previous-year papers.
+- Practice worksheets.
+- Diagrams.
+- Revision PDFs.
+
+Allow authorized content managers to upload materials.
+
+Support PDF viewing and permitted downloads.
+
+Respect copyright and textbook distribution rights. Do not reproduce copyrighted books without permission.
+
+==================================================
+21. ADMIN DASHBOARD
+
+Create a secure admin panel.
+
+Admin sections:
+
+1. Dashboard.
+2. Students.
+3. Boards.
+4. Classes.
+5. Streams.
+6. Subjects.
+7. Chapters.
+8. Topics.
+9. Questions.
+10. Previous Papers.
+11. Model Papers.
+12. Study Notes.
+13. AI Settings.
+14. Announcements.
+15. Payments.
+16. Reports.
+17. User Feedback.
+18. Content Verification.
+19. System Settings.
+
+Admin controls:
+
+- Create.
+- Edit.
+- Delete.
+- Publish.
+- Unpublish.
+- Approve.
+- Reject.
+- Search.
+- Filter.
+- Export permitted reports.
+
+Require confirmation before destructive operations.
+
+Record important administrative actions in an audit log.
+
+==================================================
+22. DATABASE ARCHITECTURE
+
+Use a scalable relational database such as PostgreSQL or an equivalent managed database.
+
+Create the following tables:
+
+1. users
+   
+   - id
+   - display_name
+   - email
+   - phone
+   - password_hash or authentication_provider_id
+   - role
+   - status
+   - created_at
+
+2. student_profiles
+   
+   - id
+   - user_id
+   - class_id
+   - board_id
+   - academic_session_id
+   - stream_id
+   - medium
+   - target_marks
+   - preparation_level
+
+3. boards
+   
+   - id
+   - name
+   - board_code
+   - country
+   - status
+
+4. academic_sessions
+   
+   - id
+   - name
+   - start_date
+   - end_date
+   - status
+
+5. classes
+   
+   - id
+   - class_name
+   - class_level
+
+6. streams
+   
+   - id
+   - name
+
+7. subjects
+   
+   - id
+   - board_id
+   - class_id
+   - stream_id
+   - subject_name
+   - subject_code
+
+8. chapters
+   
+   - id
+   - subject_id
+   - chapter_number
+   - chapter_name
+   - introduction
+   - syllabus_status
+
+9. topics
+   
+   - id
+   - chapter_id
+   - topic_name
+   - content
+
+10. learning_materials
+    
+    - id
+    - chapter_id
+    - material_type
+    - title
+    - content
+    - file_url
+    - verification_status
+
+11. questions
+    
+    - id
+    - subject_id
+    - chapter_id
+    - question_text
+    - question_type
+    - options
+    - correct_answer
+    - explanation
+    - marks
+    - priority
+
+12. question_sources
+    
+    - id
+    - question_id
+    - examination_year
+    - source_type
+    - source_document_id
+    - verification_status
+
+13. tests
+    
+    - id
+    - student_id
+    - subject_id
+    - chapter_id
+    - test_type
+    - total_marks
+    - duration
+    - status
+
+14. test_questions
+    
+    - id
+    - test_id
+    - question_id
+    - question_order
+
+15. student_answers
+    
+    - id
+    - test_id
+    - question_id
+    - student_id
+    - answer
+    - awarded_marks
+    - feedback
+    - submitted_at
+
+16. test_results
+    
+    - id
+    - test_id
+    - student_id
+    - score
+    - accuracy
+    - completed_at
+
+17. study_plans
+    
+    - id
+    - student_id
+    - plan_type
+    - start_date
+    - end_date
+    - target
+
+18. study_tasks
+    
+    - id
+    - study_plan_id
+    - title
+    - scheduled_date
+    - status
+
+19. revision_records
+    
+    - id
+    - student_id
+    - topic_id
+    - revision_date
+    - performance
+
+20. announcements
+    
+    - id
+    - title
+    - content
+    - published_at
+
+21. payments
+    
+    - id
+    - student_id
+    - amount
+    - currency
+    - payment_provider
+    - provider_transaction_id
+    - payment_status
+    - created_at
+
+22. audit_logs
+    
+    - id
+    - user_id
+    - action
+    - entity_type
+    - entity_id
+    - created_at
+
+Create proper foreign keys, indexes, constraints, and timestamps.
+
+Use transactions for important operations.
+
+Do not store plaintext passwords, payment card details, or unnecessary sensitive student information.
+
+==================================================
+23. AI BACKEND AND API ARCHITECTURE
+
+Build secure backend endpoints for:
+
+- Authentication.
+- Student profiles.
+- Curriculum.
+- Subjects.
+- Chapters.
+- Learning materials.
+- AI teaching.
+- Question generation.
+- Test generation.
+- Answer evaluation.
+- Study planning.
+- Progress analytics.
+- Admin management.
+- Payment verification if enabled.
+
+AI integration requirements:
+
+- Use a secure server-side AI API.
+- Keep API keys in environment variables or a secrets manager.
+- Never expose secret keys in frontend code.
+- Add rate limits.
+- Add request validation.
+- Add error handling.
+- Add usage monitoring.
+- Add retry handling where appropriate.
+- Store only necessary conversation and learning data.
+
+Do not use a hardcoded AI response as a replacement for real AI functionality.
+
+==================================================
+24. MASTER AI SYSTEM RULES
+
+Every AI Teacher request must receive the correct learning context.
+
+Context must include:
+
+- Student class.
+- Board.
+- Academic session.
+- Stream.
+- Subject.
+- Chapter.
+- Medium.
+- Learning mode.
+- Relevant verified curriculum material.
+
+AI must follow these rules:
+
+1. Teach according to the selected board.
+2. Teach according to the selected academic session.
+3. Do not mix different board syllabuses.
+4. Do not invent previous-year questions.
+5. Do not fabricate examination years.
+6. Do not claim unverified information is official.
+7. Distinguish factual answers from predictions.
+8. Explain difficult topics step by step.
+9. Give answers appropriate to the marks.
+10. Correct student mistakes constructively.
+11. Use age-appropriate language.
+12. Protect student privacy.
+13. Do not reveal other students' information.
+14. Do not generate harmful or inappropriate content.
+15. Encourage healthy study habits and breaks.
+
+==================================================
+25. SECURITY AND STUDENT PRIVACY
+
+The app is intended for school students, including minors.
+
+Implement:
+
+- Secure authentication.
+- Role-based permissions.
+- Database access controls.
+- Secure API endpoints.
+- Input validation.
+- Rate limiting.
+- HTTPS.
+- Secure password recovery.
+- Data deletion and account management.
+- Privacy-conscious analytics.
+- Appropriate age and guardian-consent processes.
+- Safe AI content filtering.
+- Secure file uploads.
+- Backup and recovery.
+
+Do not expose student phone numbers, email addresses, passwords, grades, or private conversations to other students.
+
+Apply applicable child privacy, data protection, and education-related laws.
+
+==================================================
+26. NOTIFICATION SYSTEM
+
+Provide optional notifications for:
+
+- Daily study tasks.
+- Upcoming tests.
+- Timetable reminders.
+- Pending revision.
+- Mock exam schedules.
+- Important announcements.
+
+Allow students to control notification preferences.
+
+Do not send excessive notifications.
+
+==================================================
+27. OPTIONAL SUBSCRIPTION AND PAYMENT MODULE
+
+Keep payments modular and disabled until configured by the app owner.
+
+If enabled, support:
+
+- Free plan.
+- Premium plan.
+- Subscription duration.
+- Plan details.
+- Payment history.
+- Secure payment gateway.
+- Payment verification.
+- Success and failure states.
+- Refund status.
+- Invoice or receipt.
+
+Never trust a payment-success response coming only from the frontend.
+
+Verify transactions securely through the payment provider's server-side API or webhook.
+
+Do not store card numbers, CVV, UPI PINs, or banking passwords.
+
+==================================================
+28. UI/UX DESIGN REQUIREMENTS
+
+Create a modern, clean, responsive educational design.
+
+Design for:
+
+- Android phones.
+- Tablets.
+- Desktop browsers.
+
+Main navigation:
+
+1. Home
+2. AI Teacher
+3. Subjects
+4. Tests
+5. Study Planner
+6. My Progress
+7. Profile
+
+Use:
+
+- Clear typography.
+- Easy navigation.
+- Readable chapter content.
+- Accessible buttons.
+- Loading indicators.
+- Empty states.
+- Error messages.
+- Confirmation messages.
+- Responsive cards.
+- Light and dark themes.
+
+Keep the interface simple for students.
+
+==================================================
+29. PERFORMANCE AND RELIABILITY
+
+Implement:
+
+- Fast page loading.
+- Pagination.
+- Search and filters.
+- Database indexing.
+- Caching where appropriate.
+- Lazy loading.
+- Auto-save for test answers.
+- Graceful API failure handling.
+- Error logging.
+- Backup procedures.
+- Responsive performance.
+
+Prevent loss of student answers when an internet connection temporarily drops.
+
+==================================================
+30. REQUIRED APP PAGES
+
+Create these pages:
+
+1. Splash Screen.
+2. Welcome Page.
+3. Registration.
+4. Login.
+5. Forgot Password.
+6. Student Onboarding.
+7. Student Dashboard.
+8. Board Selection.
+9. Class Selection.
+10. Stream Selection.
+11. Subject Selection.
+12. Subject Dashboard.
+13. Chapter List.
+14. Chapter Learning Page.
+15. AI Teacher Chat.
+16. Question Bank.
+17. Previous Year Questions.
+18. MCQ Test.
+19. Written Test.
+20. Mock Exam.
+21. Test Results.
+22. Revision Notes.
+23. Study Planner.
+24. Progress Dashboard.
+25. Study Library.
+26. Notifications.
+27. Student Profile.
+28. Settings.
+29. Admin Dashboard.
+30. Curriculum Management.
+31. Question Management.
+32. Content Verification.
+33. Payment Management (if enabled).
+
+==================================================
+31. TESTING AND QUALITY ASSURANCE
+
+Before declaring the app complete, test:
+
+- Registration.
+- Login and logout.
+- Password recovery.
+- Board selection.
+- Class selection.
+- Stream selection.
+- Subject selection.
+- Curriculum loading.
+- Chapter navigation.
+- AI Teacher responses.
+- MCQ evaluation.
+- Written test submission.
+- Mock exam submission.
+- Result calculation.
+- Progress tracking.
+- Study planner.
+- Admin permissions.
+- Payment verification if enabled.
+- Mobile responsiveness.
+- Database persistence.
+- Error handling.
+
+Check all buttons and navigation links.
+
+Do not leave placeholder buttons that look functional but do nothing.
+
+Do not mark incomplete features as completed.
+
+==================================================
+32. IMPLEMENTATION STRATEGY
+
+Build in these phases:
+
+PHASE 1:
+Authentication, student profiles, board/class selection.
+
+PHASE 2:
+Curriculum, subjects, chapters, topics, and content management.
+
+PHASE 3:
+AI Teacher and chapter-wise teaching.
+
+PHASE 4:
+Question bank, previous papers, MCQ tests, and written tests.
+
+PHASE 5:
+Mock exams, results, and performance analytics.
+
+PHASE 6:
+Personalized study planner and revision system.
+
+PHASE 7:
+Admin dashboard, notifications, and optional payment module.
+
+PHASE 8:
+Security audit, testing, optimization, and deployment.
+
+Use a modular architecture so each feature can be developed, tested, and improved independently.
+
+==================================================
+33. FINAL ACCEPTANCE CRITERIA
+
+The app is complete only when:
+
+1. Students can register and log in.
+2. Students can choose Class 10, 11, or 12.
+3. Students can select their supported board.
+4. Students can choose their stream and subjects.
+5. The correct curriculum loads for their selections.
+6. Students can study chapters.
+7. AI Teacher can explain topics.
+8. Students can take interactive tests.
+9. Test answers are evaluated correctly.
+10. Previous-year questions have verifiable sources.
+11. Students can take mock exams.
+12. Students can view their performance.
+13. Students can create study plans.
+14. Admins can manage curriculum and questions.
+15. Data persists securely.
+16. All major features work on mobile devices.
+
+FINAL INSTRUCTION:
+
+Build AI STUDENTS as a complete, functional, secure, scalable AI-powered education platform.
+
+Do not merely generate a UI design.
+
+Implement the frontend, backend, database, AI integration, authentication, student workflow, admin workflow, and testing.
+
+If any external service, API key, board syllabus, payment gateway, or data source is unavailable, clearly identify the missing dependency and provide a proper configuration process.
+
+Never fabricate real student data, official syllabus information, historical examination questions, or payment confirmations.
+
+Prioritize correctness, usability, security, and educational quality.

@@ -1,9 +1,18 @@
 import React from 'react';
-import { ArrowRight, BookOpen, Calendar, CheckCircle2, ClipboardCheck, MessageSquare, ShieldCheck } from 'lucide-react';
+import {
+  ArrowRight,
+  BookOpen,
+  Calendar,
+  CheckCircle2,
+  ClipboardCheck,
+  MessageSquare,
+  ShieldCheck,
+} from 'lucide-react';
 import { useApp } from '../context/AppContext.tsx';
 import { APP_ASSETS } from '../lib/assets.ts';
 import { BrandLogo } from '../components/BrandLogo.tsx';
 import { HomeBannerCarousel } from '../components/HomeBannerCarousel.tsx';
+import { HomePdfToolsSection } from '../components/HomePdfToolsSection.tsx';
 
 export const WelcomePage: React.FC = () => {
   const { navigate, boards, appUser, studentProfile } = useApp();
@@ -18,8 +27,13 @@ export const WelcomePage: React.FC = () => {
 
   return (
     <div className="bg-slate-50 dark:bg-slate-950">
-      {/* Hero Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-8 pt-8 pb-12 lg:py-10">
+      {/* 1. Primary Top Section: Real Interactive PDF TOOLS on App Home Screen */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-8 pt-6 pb-4">
+        <HomePdfToolsSection />
+      </section>
+
+      {/* 2. Hero Section — AI Teacher, Courses, Boards & Learning Platform */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-8 pt-6 pb-12 lg:py-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-stretch">
           <div className="lg:col-span-6 flex flex-col justify-center space-y-6">
             <div className="flex flex-wrap items-center gap-3">

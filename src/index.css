@@ -79,3 +79,41 @@
   background: rgba(100, 116, 139, 0.45);
 }
 
+/* PDF.js selectable TextLayer & in-PDF search highlights */
+.ais-pdf-textlayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.ais-pdf-textlayer span,
+.ais-pdf-textlayer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.ais-pdf-textlayer ::selection {
+  background: rgba(79, 70, 229, 0.28);
+  color: transparent;
+}
+
+.ais-pdf-textlayer span.ais-pdf-hit {
+  background-color: rgba(250, 204, 21, 0.45);
+  border-radius: 2px;
+}
+
+.ais-pdf-textlayer span.ais-pdf-hit-active {
+  background-color: rgba(249, 115, 22, 0.55);
+  outline: 2px solid rgba(234, 88, 12, 0.85);
+}
+
+

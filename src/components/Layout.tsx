@@ -59,6 +59,7 @@ const PAGE_LABELS: Record<AppPage, string> = {
   'admin-questions': 'Question Management',
   'admin-verification': 'Content Verification',
   'admin-banners': 'Branding & Home Screen Banners',
+  'admin-pdf-library': 'PDF Library & Payments',
   'admin-payments': 'Payment Management',
   'admin-support': 'Help & Support Desk',
 };
@@ -192,7 +193,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     { id: 'question-bank', label: 'Question Bank', icon: FileText },
     { id: 'pyq-bank', label: 'Previous Papers (PYQ)', icon: ClipboardCheck },
     { id: 'revision', label: 'Revision & Memory', icon: RefreshCw },
-    { id: 'library', label: 'Study Library', icon: Library },
+    { id: 'library', label: 'PDF Study Library', icon: Library },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'help-support', label: 'Help & Support', icon: LifeBuoy },
     { id: 'settings', label: 'Settings', icon: Settings },
