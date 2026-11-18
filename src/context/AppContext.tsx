@@ -1,11 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
+  GoogleAuthProvider,
   onAuthStateChanged,
+  signInWithCredential,
   signInWithCustomToken,
   signInWithPopup,
   signOut,
   User as FirebaseUser,
 } from 'firebase/auth';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { auth, googleAuthProvider, testFirestoreConnection } from '../lib/firebase.ts';
 import { isCapacitorNative } from '../lib/api.ts';
 import {
@@ -612,19 +615,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const signInWithGoogle = useCallback(async () => {
     try {
+      if (isCapacitorNative()) {
+        const result = await FirebaseAuthentication.signInWithGoogle();
+        const idToken = result.credential?.idToken;
+        if (!idToken) {
+          throw new Error(
+            'Native Google Sign-In did not return an ID token. Please verify Android Firebase & Google configuration.'
+          );
+        }
+        const credential = GoogleAuthProvider.credential(idToken);
+        await signInWithCredential(auth, credential);
+        showToast('Signed in successfully.', 'success');
+        return;
+      }
+
       await signInWithPopup(auth, googleAuthProvider);
       showToast('Signed in successfully.', 'success');
     } catch (err: any) {
       const code = String(err?.code || '');
+      const message = String(err?.message || '');
       if (
-        isCapacitorNative() &&
-        (code === 'auth/popup-blocked' ||
-          code === 'auth/operation-not-supported-in-this-environment' ||
-          code === 'auth/unauthorized-domain')
+        code === 'auth/popup-closed-by-user' ||
+        code === 'auth/cancelled-popup-request' ||
+        code === 'CANCELED' ||
+        /cancel/i.test(message)
       ) {
-        throw new Error(
-          'Google popup sign-in is restricted inside this Android WebView. Please use Email/Phone & Password Login or Registration.'
-        );
+        throw new Error('Google Sign-In was cancelled.');
       }
       throw err;
     }
@@ -790,6 +806,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications([]);
     setAiChatHistories({});
     setSupportTickets([]);
+    if (isCapacitorNative()) {
+      await FirebaseAuthentication.signOut().catch(() => {});
+    }
     if (auth.currentUser) {
       await signOut(auth);
     }
