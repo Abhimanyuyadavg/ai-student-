@@ -171,8 +171,23 @@ jobs:
               isinstance(o, dict) and o.get("client_type") == 1 for o in oauth_clients
           )
 
+          if os.path.isfile("firebase-applet-config.json"):
+              try:
+                  with open("firebase-applet-config.json", "r", encoding="utf-8") as wf:
+                      web_cfg = json.load(wf)
+                  web_pid = web_cfg.get("projectId")
+                  android_pid = project_info.get("project_id")
+                  if web_pid and android_pid and web_pid != android_pid:
+                      print("::warning::Firebase project_id in google-services.json differs from firebase-applet-config.json. Ensure both belong to the same Firebase project.")
+              except Exception:
+                  pass
+
           print("Validated android/app/google-services.json for package com.aistudents.app.")
           print(f"OAuth clients present - web (client_type=3): {has_web_oauth}, android SHA (client_type=1): {has_android_oauth}")
+          if not has_web_oauth:
+              print("::warning::OAuth client_type=3 (default_web_client_id) missing in google-services.json. Enable Google provider in Firebase Console and re-download google-services.json.")
+          if not has_android_oauth:
+              print("::warning::OAuth client_type=1 (Android SHA-1) missing in google-services.json. Register your SHA-1 & SHA-256 fingerprints in Firebase Console and re-download google-services.json.")
           PY
           then
             rm -f "$TARGET_FILE"
@@ -191,6 +206,8 @@ jobs:
           ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: 11. Verify APK & Firebase Plugin Packaging
+        env:
+          FIREBASE_CONFIGURED: ${{ steps.firebase_config.outputs.firebase_configured }}
         run: |
           set -euo pipefail
           APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
@@ -203,6 +220,20 @@ jobs:
           else
             echo "::error::FirebaseAuthenticationPlugin missing from assets/capacitor.plugins.json"
             exit 1
+          fi
+
+          if [ "$FIREBASE_CONFIGURED" = "true" ]; then
+            GS_RES="android/app/build/generated/res/google-services/debug/values/values.xml"
+            if [ ! -s "$GS_RES" ]; then
+              echo "::error::com.google.gms.google-services did not generate Firebase Android resources at $GS_RES."
+              exit 1
+            fi
+            grep -q 'name="google_app_id"' "$GS_RES" && echo "Verified: google_app_id generated in Android resources." || { echo "::error::google_app_id missing from generated Firebase resources."; exit 1; }
+            if grep -q 'name="default_web_client_id"' "$GS_RES"; then
+              echo "Verified: default_web_client_id generated in Android resources."
+            else
+              echo "::warning::default_web_client_id was not generated in Android resources. Enable Google Sign-In in Firebase Console and re-download google-services.json."
+            fi
           fi
 
       - name: 12. Upload APK Artifact
