@@ -60,58 +60,112 @@ jobs:
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://ais-pre-sep3an4tmru2vymxhi6lyy-318163649696.asia-northeast1.run.app' }}
         run: npm run build
 
-      - name: Configure Android google-services.json (if secret provided)
+      - name: 8. Configure and validate Android google-services.json
         env:
           GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
-          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
-            echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
-            echo "Configured android/app/google-services.json from GOOGLE_SERVICES_JSON_BASE64 secret."
-          elif [ -n "$GOOGLE_SERVICES_JSON" ]; then
-            printf '%s\n' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
-            echo "Configured android/app/google-services.json from GOOGLE_SERVICES_JSON secret."
-          elif [ -f android/app/google-services.json ]; then
-            echo "Using repository android/app/google-services.json."
-          else
-            echo "::warning::android/app/google-services.json not found. Native FirebaseAuthentication plugin requires google-services.json to initialize FirebaseApp and Google Sign-In on Android."
+          set -euo pipefail
+
+          if [ -z "${GOOGLE_SERVICES_JSON_BASE64:-}" ]; then
+            echo "::error::Missing required GitHub Actions secret GOOGLE_SERVICES_JSON_BASE64. Add it under Repository -> Settings -> Secrets and variables -> Actions -> New repository secret."
+            exit 1
           fi
 
-          if [ -f android/app/google-services.json ]; then
-            node -e '
-              const fs = require("fs");
-              const cfg = JSON.parse(fs.readFileSync("android/app/google-services.json", "utf8"));
-              const clients = Array.isArray(cfg.client) ? cfg.client : [];
-              const androidClient = clients.find(c => c?.client_info?.android_client_info?.package_name === "com.aistudents.app");
-              if (!androidClient) {
-                console.error("ERROR: google-services.json does not contain an Android client for package com.aistudents.app");
-                process.exit(1);
-              }
-              const oauthClients = Array.isArray(androidClient.oauth_client) ? androidClient.oauth_client : [];
-              const hasWebClient = oauthClients.some(o => o.client_type === 3);
-              const hasAndroidOauth = oauthClients.some(o => o.client_type === 1);
-              console.log("Verified google-services.json for com.aistudents.app (Web OAuth client_type=3:", hasWebClient, ", Android SHA OAuth client_type=1:", hasAndroidOauth, ")");
-              if (!hasWebClient) {
-                console.warn("::warning::google-services.json is missing OAuth client_type 3 (default_web_client_id). Enable Google Sign-In in Firebase Console and re-download google-services.json.");
-              }
-              if (!hasAndroidOauth) {
-                console.warn("::warning::google-services.json is missing OAuth client_type 1 (Android SHA-1). Add your Debug/Release SHA-1 & SHA-256 in Firebase Console and re-download google-services.json.");
-              }
-            '
+          mkdir -p android/app
+          if ! printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | tr -d '\r\n[:space:]' | base64 --decode > android/app/google-services.json 2>/dev/null; then
+            rm -f android/app/google-services.json
+            echo "::error::Failed to Base64-decode GOOGLE_SERVICES_JSON_BASE64. Verify the secret contains valid Base64 encoded google-services.json."
+            exit 1
           fi
 
-      - name: 8. Capacitor sync Android
+          if [ ! -s android/app/google-services.json ]; then
+            rm -f android/app/google-services.json
+            echo "::error::Decoded android/app/google-services.json is empty."
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          path = "android/app/google-services.json"
+          if not os.path.isfile(path):
+              print("::error::android/app/google-services.json was not created.")
+              sys.exit(1)
+
+          try:
+              with open(path, "r", encoding="utf-8") as f:
+                  data = json.load(f)
+          except Exception:
+              print("::error::android/app/google-services.json is not valid JSON.")
+              sys.exit(1)
+
+          if not isinstance(data, dict):
+              print("::error::android/app/google-services.json root must be a JSON object.")
+              sys.exit(1)
+
+          project_info = data.get("project_info")
+          if not isinstance(project_info, dict) or not project_info.get("project_id") or not project_info.get("project_number"):
+              print("::error::google-services.json is missing required project_info fields (project_id / project_number).")
+              sys.exit(1)
+
+          clients = data.get("client")
+          if not isinstance(clients, list) or len(clients) == 0:
+              print("::error::google-services.json does not contain any Firebase client entries.")
+              sys.exit(1)
+
+          target_pkg = "com.aistudents.app"
+          matched_client = None
+          for client in clients:
+              if not isinstance(client, dict):
+                  continue
+              pkg = (
+                  client.get("client_info", {})
+                  .get("android_client_info", {})
+                  .get("package_name")
+              )
+              if pkg == target_pkg:
+                  matched_client = client
+                  break
+
+          if matched_client is None:
+              print(f"::error::google-services.json does not match Android package name '{target_pkg}'.")
+              sys.exit(1)
+
+          app_id = matched_client.get("client_info", {}).get("mobilesdk_app_id")
+          api_keys = matched_client.get("api_key")
+          has_api_key = isinstance(api_keys, list) and any(
+              isinstance(k, dict) and bool(k.get("current_key")) for k in api_keys
+          )
+          if not app_id or not has_api_key:
+              print("::error::google-services.json client entry is missing mobilesdk_app_id or api_key.")
+              sys.exit(1)
+
+          oauth_clients = matched_client.get("oauth_client")
+          has_web_oauth = isinstance(oauth_clients, list) and any(
+              isinstance(o, dict) and o.get("client_type") == 3 for o in oauth_clients
+          )
+          has_android_oauth = isinstance(oauth_clients, list) and any(
+              isinstance(o, dict) and o.get("client_type") == 1 for o in oauth_clients
+          )
+
+          print("Validated android/app/google-services.json for package com.aistudents.app.")
+          print(f"OAuth clients present - web (client_type=3): {has_web_oauth}, android SHA (client_type=1): {has_android_oauth}")
+          PY
+
+      - name: 9. Capacitor sync Android
         run: npx cap sync android
 
-      - name: 9. Gradle assembleDebug
+      - name: 10. Gradle assembleDebug
         run: |
           chmod +x android/gradlew
           cd android
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 10. Verify APK & Firebase Plugin Packaging
-        id: verify_apk
+      - name: 11. Verify APK & Firebase Plugin Packaging
         run: |
+          set -euo pipefail
           APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK_PATH"
           ls -lh "$APK_PATH"
@@ -120,18 +174,11 @@ jobs:
           if unzip -p "$APK_PATH" assets/capacitor.plugins.json | grep -q "FirebaseAuthenticationPlugin"; then
             echo "Verified: FirebaseAuthenticationPlugin is registered in assets/capacitor.plugins.json."
           else
-            echo "ERROR: FirebaseAuthenticationPlugin missing from assets/capacitor.plugins.json"
+            echo "::error::FirebaseAuthenticationPlugin missing from assets/capacitor.plugins.json"
             exit 1
           fi
 
-          if [ -f android/app/google-services.json ]; then
-            echo "firebase_android_configured=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "firebase_android_configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::APK built WITHOUT android/app/google-services.json. Native Google Sign-In & Phone OTP will report FirebaseAuthentication uninitialized until google-services.json is configured."
-          fi
-
-      - name: 11. Upload APK Artifact
+      - name: 12. Upload APK Artifact
         uses: actions/upload-artifact@v7
         with:
           name: ai-students-debug-apk
@@ -139,7 +186,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: 12. Publish APK to GitHub Releases
+      - name: 13. Publish APK to GitHub Releases
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -162,6 +209,6 @@ jobs:
             echo "## AI Students Android APK Ready"
             echo "- **Artifact**: \`ai-students-debug-apk\`"
             echo "- **APK Size**: $(du -h "$APK_PATH" | cut -f1)"
-            echo "- **Firebase Android google-services.json bundled**: \`${{ steps.verify_apk.outputs.firebase_android_configured }}\`"
+            echo "- **Firebase Android Configuration**: Verified for \`com.aistudents.app\`"
             echo "- **Direct Release Download**: $DOWNLOAD_URL"
           } >> "$GITHUB_STEP_SUMMARY"
