@@ -1,16 +1,29 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
+  createUserWithEmailAndPassword,
   GoogleAuthProvider,
   onAuthStateChanged,
+  PhoneAuthProvider,
+  RecaptchaVerifier,
+  sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithCredential,
   signInWithCustomToken,
+  signInWithEmailAndPassword,
+  signInWithPhoneNumber,
   signInWithPopup,
   signOut,
+  updateProfile,
+  type ConfirmationResult,
   User as FirebaseUser,
 } from 'firebase/auth';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { auth, googleAuthProvider, testFirestoreConnection } from '../lib/firebase.ts';
-import { isCapacitorNative } from '../lib/api.ts';
+import {
+  getRuntimePlatform,
+  isCapacitorNative,
+  isFirebaseAuthPluginAvailable,
+} from '../lib/api.ts';
 import {
   deleteEntityDoc,
   deleteFaqDoc,
@@ -133,6 +146,12 @@ interface AppContextValue {
   sessionToken: string | null;
   getApiHeaders: () => Promise<Record<string, string>>;
   signInWithGoogle: () => Promise<void>;
+  sendPhoneOtp: (
+    phoneNumber: string,
+    options?: { resend?: boolean; recaptchaContainerId?: string }
+  ) => Promise<{ verificationId: string; normalizedPhone: string; autoSignedIn: boolean }>;
+  verifyPhoneOtp: (verificationId: string, otpCode: string) => Promise<void>;
+  sendFirebasePasswordReset: (email: string) => Promise<void>;
   registerWithCredentials: (payload: {
     displayName: string;
     identifier: string;
@@ -287,6 +306,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
   const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(null);
+  const phoneConfirmationRef = useRef<ConfirmationResult | null>(null);
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
   const [boards, setBoards] = useState<Board[]>(SEED_BOARDS);
   const [sessions, setSessions] = useState<AcademicSession[]>(SEED_SESSIONS);
@@ -529,8 +550,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (!userDoc) {
             userDoc = {
               uid: fbUser.uid,
-              displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'Student',
+              displayName:
+                fbUser.displayName ||
+                fbUser.email?.split('@')[0] ||
+                fbUser.phoneNumber ||
+                'Student',
               email: fbUser.email || '',
+              phone: fbUser.phoneNumber || '',
               photoUrl: fbUser.photoURL || '',
               role: isBootstrapAdmin ? 'admin' : 'student',
               status: 'active',
@@ -547,8 +573,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setAppUser(userDoc);
           const fsProfile = await fetchStudentProfile(fbUser.uid).catch(() => null);
           const serverWs = await hydrateUserWorkspace(fbUser.uid);
-          const effectiveProfile = fsProfile || serverWs?.studentProfile || null;
+          let cachedProfile: StudentProfile | null = null;
+          try {
+            const rawProf = window.localStorage.getItem(`ais_profile_${fbUser.uid}`);
+            if (rawProf) cachedProfile = JSON.parse(rawProf);
+          } catch {
+            // Ignore cache parse error
+          }
+          const effectiveProfile = fsProfile || serverWs?.studentProfile || cachedProfile || null;
           setStudentProfile(effectiveProfile);
+          if (effectiveProfile) {
+            try {
+              window.localStorage.setItem(
+                `ais_profile_${fbUser.uid}`,
+                JSON.stringify(effectiveProfile)
+              );
+            } catch {
+              // Ignore storage quota error
+            }
+          }
 
           if (userDoc.role === 'admin' || userDoc.role === 'content_manager') {
             refreshAdminData().catch(() => {});
@@ -616,11 +659,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const signInWithGoogle = useCallback(async () => {
     try {
       if (isCapacitorNative()) {
-        const result = await FirebaseAuthentication.signInWithGoogle();
+        if (!isFirebaseAuthPluginAvailable()) {
+          const platform = getRuntimePlatform();
+          throw new Error(
+            `Native FirebaseAuthentication plugin is unavailable on ${platform}. This happens when android/app/google-services.json was missing during the APK build so FirebaseApp could not initialize on startup. Add google-services.json with SHA-1/SHA-256 and rebuild the APK.`
+          );
+        }
+
+        let result;
+        try {
+          result = await FirebaseAuthentication.signInWithGoogle();
+        } catch (nativeErr: any) {
+          const nativeMsg = String(nativeErr?.message || '');
+          // Fallback to classic Google Sign-In Intent if Android Credential Manager reports NoCredentialException
+          if (/NoCredentialException|no credentials available/i.test(nativeMsg) && !/cancel/i.test(nativeMsg)) {
+            result = await FirebaseAuthentication.signInWithGoogle({ useCredentialManager: false });
+          } else {
+            throw nativeErr;
+          }
+        }
+
         const idToken = result.credential?.idToken;
         if (!idToken) {
           throw new Error(
-            'Native Google Sign-In did not return an ID token. Please verify Android Firebase & Google configuration.'
+            'Native Google Sign-In did not return an ID token. Verify android/app/google-services.json and Firebase SHA-1/SHA-256 setup.'
           );
         }
         const credential = GoogleAuthProvider.credential(idToken);
@@ -642,9 +704,310 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ) {
         throw new Error('Google Sign-In was cancelled.');
       }
+      if (
+        code === 'UNIMPLEMENTED' ||
+        /not implemented on android/i.test(message) ||
+        /Default FirebaseApp is not initialized/i.test(message)
+      ) {
+        throw new Error(
+          'Native Firebase Android plugin could not initialize because android/app/google-services.json was missing when this APK was built. Add google-services.json + SHA-1/SHA-256 in Firebase Console and rebuild the APK, or use Email & Password Login.'
+        );
+      }
+      if (
+        /DEVELOPER_ERROR|NoCredentialException|ApiException:\s*10\b/i.test(message)
+      ) {
+        throw new Error(
+          'Android Google Sign-In configuration error (SHA-1/SHA-256 or OAuth client mismatch). Add your APK SHA-1 & SHA-256 in Firebase Console for com.aistudents.app and rebuild with updated google-services.json.'
+        );
+      }
       throw err;
     }
   }, [showToast]);
+
+  const normalizePhoneE164 = (raw: string): string => {
+    const cleaned = raw.trim().replace(/[\s()-]/g, '');
+    if (/^[6-9]\d{9}$/.test(cleaned)) {
+      return `+91${cleaned}`;
+    }
+    if (/^\+[1-9]\d{7,14}$/.test(cleaned)) {
+      return cleaned;
+    }
+    throw new Error(
+      'Enter a valid 10-digit mobile number or international number with country code (e.g. +919876543210).'
+    );
+  };
+
+  const sendPhoneOtp = useCallback(
+    async (
+      phoneNumber: string,
+      options?: { resend?: boolean; recaptchaContainerId?: string }
+    ): Promise<{ verificationId: string; normalizedPhone: string; autoSignedIn: boolean }> => {
+      const normalizedPhone = normalizePhoneE164(phoneNumber);
+
+      if (isCapacitorNative()) {
+        if (!isFirebaseAuthPluginAvailable()) {
+          throw new Error(
+            'Native FirebaseAuthentication plugin is unavailable on Android (missing android/app/google-services.json during APK build). Add google-services.json + SHA-1/SHA-256 in Firebase Console and rebuild APK.'
+          );
+        }
+        const handles: Array<{ remove: () => Promise<void> }> = [];
+        const cleanup = async () => {
+          await Promise.all(handles.map((h) => h.remove().catch(() => {})));
+        };
+
+        try {
+          return await new Promise<{
+            verificationId: string;
+            normalizedPhone: string;
+            autoSignedIn: boolean;
+          }>((resolve, reject) => {
+            let settled = false;
+            let lastVerificationId = '';
+            const timeoutHandle = setTimeout(() => {
+              if (!settled) {
+                settled = true;
+                void cleanup();
+                reject(new Error('OTP request timed out. Please check your network and try again.'));
+              }
+            }, 35_000);
+
+            const finishResolve = (val: {
+              verificationId: string;
+              normalizedPhone: string;
+              autoSignedIn: boolean;
+            }) => {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timeoutHandle);
+              void cleanup();
+              resolve(val);
+            };
+
+            const finishReject = (error: Error) => {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timeoutHandle);
+              void cleanup();
+              reject(error);
+            };
+
+            Promise.all([
+              FirebaseAuthentication.addListener('phoneCodeSent', (event) => {
+                lastVerificationId = event.verificationId;
+                finishResolve({
+                  verificationId: event.verificationId,
+                  normalizedPhone,
+                  autoSignedIn: false,
+                });
+              }),
+              FirebaseAuthentication.addListener('phoneVerificationCompleted', async (event) => {
+                try {
+                  if (event.verificationCode && lastVerificationId) {
+                    const cred = PhoneAuthProvider.credential(
+                      lastVerificationId,
+                      event.verificationCode
+                    );
+                    await signInWithCredential(auth, cred);
+                    showToast('Phone number verified and signed in.', 'success');
+                    finishResolve({
+                      verificationId: lastVerificationId,
+                      normalizedPhone,
+                      autoSignedIn: true,
+                    });
+                    return;
+                  }
+                } catch (err: any) {
+                  finishReject(new Error(err?.message || 'Automatic OTP verification failed.'));
+                }
+              }),
+              FirebaseAuthentication.addListener('phoneVerificationFailed', (event) => {
+                const msg = String(event?.message || 'Phone verification failed.');
+                if (/billing|quota|blocked|app-not-authorized|operation-not-allowed/i.test(msg)) {
+                  finishReject(
+                    new Error(
+                      'Firebase Phone OTP is not enabled or billing/Play Integrity setup is incomplete in Firebase Console for this Android app.'
+                    )
+                  );
+                } else {
+                  finishReject(new Error(msg));
+                }
+              }),
+            ])
+              .then(async (registered) => {
+                handles.push(...registered);
+                await FirebaseAuthentication.signInWithPhoneNumber({
+                  phoneNumber: normalizedPhone,
+                  timeout: 60,
+                  resendCode: Boolean(options?.resend),
+                  skipNativeAuth: true,
+                });
+              })
+              .catch((err: any) => {
+                const msg = String(err?.message || '');
+                const code = String(err?.code || '');
+                if (
+                  code === 'UNIMPLEMENTED' ||
+                  /not implemented on android|Default FirebaseApp is not initialized/i.test(msg)
+                ) {
+                  finishReject(
+                    new Error(
+                      'Native Firebase Android plugin is not initialized in this APK (missing android/app/google-services.json). Add google-services.json and rebuild APK.'
+                    )
+                  );
+                } else if (/provider is not enabled/i.test(msg)) {
+                  finishReject(
+                    new Error('Phone provider is not enabled in Capacitor FirebaseAuthentication config.')
+                  );
+                } else {
+                  finishReject(new Error(msg || 'Failed to send OTP.'));
+                }
+              });
+          });
+        } catch (err) {
+          await cleanup();
+          throw err;
+        }
+      }
+
+      const containerId = options?.recaptchaContainerId || 'recaptcha-container';
+      if (recaptchaVerifierRef.current) {
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch {
+          // Ignore stale verifier cleanup
+        }
+        recaptchaVerifierRef.current = null;
+      }
+
+      try {
+        const verifier = new RecaptchaVerifier(auth, containerId, {
+          size: 'invisible',
+        });
+        recaptchaVerifierRef.current = verifier;
+        const confirmation = await signInWithPhoneNumber(auth, normalizedPhone, verifier);
+        phoneConfirmationRef.current = confirmation;
+        return {
+          verificationId: confirmation.verificationId,
+          normalizedPhone,
+          autoSignedIn: false,
+        };
+      } catch (err: any) {
+        const code = String(err?.code || '');
+        if (code === 'auth/operation-not-allowed') {
+          throw new Error(
+            'Phone OTP authentication is not enabled in Firebase Console -> Authentication -> Sign-in method.'
+          );
+        }
+        if (code === 'auth/billing-not-enabled') {
+          throw new Error(
+            'Firebase Phone SMS requires billing/Blaze plan or Firebase Test Phone Numbers configured in Firebase Console.'
+          );
+        }
+        if (code === 'auth/too-many-requests') {
+          throw new Error('Too many OTP requests. Please wait a little while before trying again.');
+        }
+        if (code === 'auth/invalid-phone-number') {
+          throw new Error('Invalid phone number format. Include country code (e.g. +919876543210).');
+        }
+        throw new Error(err?.message || 'Unable to send OTP via Firebase.');
+      }
+    },
+    [showToast]
+  );
+
+  const verifyPhoneOtp = useCallback(
+    async (verificationId: string, otpCode: string) => {
+      const trimmedCode = otpCode.trim();
+      if (!/^\d{6}$/.test(trimmedCode)) {
+        throw new Error('Please enter a valid 6-digit OTP code.');
+      }
+
+      try {
+        if (isCapacitorNative()) {
+          if (!verificationId) {
+            throw new Error('OTP session expired. Please request a new OTP.');
+          }
+          const credential = PhoneAuthProvider.credential(verificationId, trimmedCode);
+          await signInWithCredential(auth, credential);
+          showToast('Mobile number verified and signed in.', 'success');
+          return;
+        }
+
+        const confirmation = phoneConfirmationRef.current;
+        if (!confirmation) {
+          throw new Error('OTP session expired. Please request a new OTP.');
+        }
+        await confirmation.confirm(trimmedCode);
+        phoneConfirmationRef.current = null;
+        showToast('Mobile number verified and signed in.', 'success');
+      } catch (err: any) {
+        const code = String(err?.code || '');
+        if (code === 'auth/invalid-verification-code') {
+          throw new Error('Incorrect OTP code. Please check and try again.');
+        }
+        if (code === 'auth/code-expired' || code === 'auth/session-expired') {
+          throw new Error('OTP has expired. Please tap Resend OTP.');
+        }
+        throw err;
+      }
+    },
+    [showToast]
+  );
+
+  const sendFirebasePasswordReset = useCallback(async (email: string) => {
+    const trimmed = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      throw new Error('Please enter a valid email address.');
+    }
+    await sendPasswordResetEmail(auth, trimmed);
+  }, []);
+
+  const parseJsonSafe = async (
+    res: Response
+  ): Promise<{ isJson: boolean; data: any }> => {
+    try {
+      const text = await res.text();
+      if (!text) return { isJson: false, data: null };
+      return { isJson: true, data: JSON.parse(text) };
+    } catch {
+      return { isJson: false, data: null };
+    }
+  };
+
+  const mapFirebaseEmailAuthError = (err: any): Error => {
+    const code = String(err?.code || '');
+    if (code === 'auth/email-already-in-use') {
+      return new Error('An account with this email already exists. Please sign in instead.');
+    }
+    if (code === 'auth/invalid-email') {
+      return new Error('Please enter a valid email address.');
+    }
+    if (code === 'auth/weak-password') {
+      return new Error('Password must be at least 6–8 characters long.');
+    }
+    if (
+      code === 'auth/invalid-credential' ||
+      code === 'auth/wrong-password' ||
+      code === 'auth/user-not-found'
+    ) {
+      return new Error('Invalid email or password. Please check your credentials and try again.');
+    }
+    if (code === 'auth/user-disabled') {
+      return new Error('This account has been disabled.');
+    }
+    if (code === 'auth/too-many-requests') {
+      return new Error('Too many failed attempts. Please wait a moment and try again.');
+    }
+    if (code === 'auth/operation-not-allowed') {
+      return new Error(
+        'Email/Password sign-in is disabled in Firebase Console -> Authentication -> Sign-in method.'
+      );
+    }
+    if (code === 'auth/network-request-failed') {
+      return new Error('Network error while connecting to Firebase Authentication. Check your internet connection.');
+    }
+    return err instanceof Error ? err : new Error(String(err || 'Authentication failed.'));
+  };
 
   const registerWithCredentials = useCallback(
     async (payload: {
@@ -658,137 +1021,239 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       guardianContact?: string;
     }) => {
       const { pendingPhotoDataUrl, ...registerBody } = payload;
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(registerBody),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Registration failed.');
-      }
-      window.localStorage.setItem(SESSION_TOKEN_KEY, data.sessionToken);
-      setSessionToken(data.sessionToken);
+      const trimmedIdentifier = payload.identifier.trim();
+      const isEmailIdentifier = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedIdentifier);
 
-      let resolvedPhotoUrl = payload.photoUrl || '';
-      if (pendingPhotoDataUrl) {
-        try {
-          const uploadRes = await fetch('/api/images/upload', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${data.sessionToken}`,
-            },
-            body: JSON.stringify({
-              dataUrl: pendingPhotoDataUrl,
-              category: 'profile',
-              visibility: 'private',
-              altText: `${data.user.displayName} profile photo`,
-            }),
-          });
-          if (uploadRes.ok) {
-            const uploaded = await uploadRes.json();
-            if (uploaded.url) {
-              resolvedPhotoUrl = uploaded.url;
-              await fetch('/api/profile/photo', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${data.sessionToken}`,
-                },
-                body: JSON.stringify({ photoUrl: resolvedPhotoUrl }),
-              }).catch(() => {});
-            }
-          }
-        } catch {
-          // Non-fatal: student can upload/retry profile photo later in Profile
+      let backendStatus = 0;
+      let backendJson = false;
+      let data: any = null;
+
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(registerBody),
+        });
+        backendStatus = res.status;
+        const parsed = await parseJsonSafe(res);
+        backendJson = parsed.isJson;
+        data = parsed.data;
+        if (!res.ok && parsed.isJson && data?.error) {
+          throw new Error(data.error);
+        }
+      } catch (fetchErr: any) {
+        if (!isCapacitorNative() || (backendJson && backendStatus >= 400 && backendStatus < 500)) {
+          throw fetchErr;
         }
       }
 
-      const createdUser: AppUser = {
-        uid: data.user.uid,
-        displayName: data.user.displayName,
-        email: data.user.email || '',
-        phone: data.user.phone || '',
-        photoUrl: resolvedPhotoUrl,
-        role: data.user.role || 'student',
-        status: 'active',
-        ageConfirmed: data.user.ageConfirmed,
-        guardianConsent: data.user.guardianConsent,
-        guardianContact: data.user.guardianContact || '',
-        createdAt: new Date().toISOString(),
-      };
-      window.localStorage.setItem(CREDENTIAL_USER_KEY, JSON.stringify(createdUser));
-      setAppUser(createdUser);
+      if (backendJson && data?.sessionToken) {
+        window.localStorage.setItem(SESSION_TOKEN_KEY, data.sessionToken);
+        setSessionToken(data.sessionToken);
 
-      if (data.customToken) {
-        await signInWithCustomToken(auth, data.customToken).catch(() => {});
+        let resolvedPhotoUrl = payload.photoUrl || '';
+        if (pendingPhotoDataUrl) {
+          try {
+            const uploadRes = await fetch('/api/images/upload', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${data.sessionToken}`,
+              },
+              body: JSON.stringify({
+                dataUrl: pendingPhotoDataUrl,
+                category: 'profile',
+                visibility: 'private',
+                altText: `${data.user.displayName} profile photo`,
+              }),
+            });
+            if (uploadRes.ok) {
+              const uploaded = await uploadRes.json();
+              if (uploaded.url) {
+                resolvedPhotoUrl = uploaded.url;
+                await fetch('/api/profile/photo', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${data.sessionToken}`,
+                  },
+                  body: JSON.stringify({ photoUrl: resolvedPhotoUrl }),
+                }).catch(() => {});
+              }
+            }
+          } catch {
+            // Non-fatal: student can upload/retry profile photo later in Profile
+          }
+        }
+
+        const createdUser: AppUser = {
+          uid: data.user.uid,
+          displayName: data.user.displayName,
+          email: data.user.email || '',
+          phone: data.user.phone || '',
+          photoUrl: resolvedPhotoUrl,
+          role: data.user.role || 'student',
+          status: 'active',
+          ageConfirmed: data.user.ageConfirmed,
+          guardianConsent: data.user.guardianConsent,
+          guardianContact: data.user.guardianContact || '',
+          createdAt: new Date().toISOString(),
+        };
+        window.localStorage.setItem(CREDENTIAL_USER_KEY, JSON.stringify(createdUser));
+        setAppUser(createdUser);
+
+        if (data.customToken) {
+          await signInWithCustomToken(auth, data.customToken).catch(() => {});
+        }
+        if (auth.currentUser) {
+          await saveUserRecord(createdUser).catch(() => {});
+        }
+        await hydrateUserWorkspace(createdUser.uid, data.sessionToken);
+        setCurrentPage('onboarding');
+        showToast('Account created. Let’s set up your board and subjects.', 'success');
+        return;
       }
-      if (auth.currentUser) {
-        await saveUserRecord(createdUser).catch(() => {});
+
+      if (isCapacitorNative() && isEmailIdentifier) {
+        try {
+          const cred = await createUserWithEmailAndPassword(auth, trimmedIdentifier, payload.password);
+          await updateProfile(cred.user, {
+            displayName: payload.displayName.trim(),
+            ...(payload.photoUrl?.trim() ? { photoURL: payload.photoUrl.trim() } : {}),
+          }).catch(() => {});
+          await sendEmailVerification(cred.user).catch(() => {});
+
+          const createdUser: AppUser = {
+            uid: cred.user.uid,
+            displayName: payload.displayName.trim(),
+            email: cred.user.email || trimmedIdentifier.toLowerCase(),
+            phone: cred.user.phoneNumber || '',
+            photoUrl: payload.photoUrl?.trim() || '',
+            role: 'student',
+            status: 'active',
+            ageConfirmed: payload.ageConfirmed,
+            guardianConsent: payload.guardianConsent,
+            guardianContact: payload.guardianContact || '',
+            createdAt: new Date().toISOString(),
+          };
+          setAppUser(createdUser);
+          await saveUserRecord(createdUser).catch(() => {});
+          await hydrateUserWorkspace(createdUser.uid);
+          setCurrentPage('onboarding');
+          showToast('Account created with Firebase. Let’s set up your board and subjects.', 'success');
+          return;
+        } catch (fbErr: any) {
+          throw mapFirebaseEmailAuthError(fbErr);
+        }
       }
-      await hydrateUserWorkspace(createdUser.uid, data.sessionToken);
-      setCurrentPage('onboarding');
-      showToast('Account created. Let’s set up your board and subjects.', 'success');
+
+      if (isCapacitorNative() && !isEmailIdentifier) {
+        throw new Error(
+          'Backend API is currently unavailable for mobile/password sign-up. Please register with your Email & Password or use the Mobile OTP tab.'
+        );
+      }
+
+      throw new Error('Registration failed. Please try again.');
     },
     [hydrateUserWorkspace, showToast]
   );
 
   const loginWithCredentials = useCallback(
     async (identifier: string, password: string) => {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Sign in failed.');
-      }
-      window.localStorage.setItem(SESSION_TOKEN_KEY, data.sessionToken);
-      setSessionToken(data.sessionToken);
+      const trimmedIdentifier = identifier.trim();
+      const isEmailIdentifier = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedIdentifier);
 
-      const loggedUser: AppUser = {
-        uid: data.user.uid,
-        displayName: data.user.displayName,
-        email: data.user.email || '',
-        phone: data.user.phone || '',
-        photoUrl: data.user.photoUrl || '',
-        role: data.user.role,
-        status: 'active',
-        ageConfirmed: data.user.ageConfirmed,
-        guardianConsent: data.user.guardianConsent,
-        createdAt: new Date().toISOString(),
-      };
-      window.localStorage.setItem(CREDENTIAL_USER_KEY, JSON.stringify(loggedUser));
-      setAppUser(loggedUser);
+      let backendStatus = 0;
+      let backendJson = false;
+      let data: any = null;
 
-      if (data.customToken) {
-        await signInWithCustomToken(auth, data.customToken).catch(() => {});
-      }
-
-      const serverWs = await hydrateUserWorkspace(loggedUser.uid, data.sessionToken);
-      let effectiveProfile: StudentProfile | null = serverWs?.studentProfile || null;
-      if (!effectiveProfile && auth.currentUser) {
-        effectiveProfile = await fetchStudentProfile(loggedUser.uid).catch(() => null);
-      }
-      if (!effectiveProfile) {
-        try {
-          const cached = window.localStorage.getItem(`ais_profile_${loggedUser.uid}`);
-          if (cached) effectiveProfile = JSON.parse(cached);
-        } catch {
-          // Ignore
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: trimmedIdentifier, password }),
+        });
+        backendStatus = res.status;
+        const parsed = await parseJsonSafe(res);
+        backendJson = parsed.isJson;
+        data = parsed.data;
+        if (!res.ok && parsed.isJson && data?.error) {
+          // On native Android, allow Firebase Email/Password sign-in if the account lives in Firebase Auth (e.g. 401 from backend store)
+          if (!(isCapacitorNative() && isEmailIdentifier && res.status === 401)) {
+            throw new Error(data.error);
+          }
+        }
+      } catch (fetchErr: any) {
+        if (!isCapacitorNative() || (backendJson && backendStatus >= 400 && backendStatus < 500 && backendStatus !== 401)) {
+          throw fetchErr;
         }
       }
 
-      if (effectiveProfile) {
-        setStudentProfile(effectiveProfile);
-        window.localStorage.setItem(`ais_profile_${loggedUser.uid}`, JSON.stringify(effectiveProfile));
-        setCurrentPage(effectiveProfile.onboardingCompleted ? 'dashboard' : 'onboarding');
-      } else {
-        setCurrentPage('onboarding');
+      if (backendJson && data?.sessionToken && data?.user) {
+        window.localStorage.setItem(SESSION_TOKEN_KEY, data.sessionToken);
+        setSessionToken(data.sessionToken);
+
+        const loggedUser: AppUser = {
+          uid: data.user.uid,
+          displayName: data.user.displayName,
+          email: data.user.email || '',
+          phone: data.user.phone || '',
+          photoUrl: data.user.photoUrl || '',
+          role: data.user.role,
+          status: 'active',
+          ageConfirmed: data.user.ageConfirmed,
+          guardianConsent: data.user.guardianConsent,
+          createdAt: new Date().toISOString(),
+        };
+        window.localStorage.setItem(CREDENTIAL_USER_KEY, JSON.stringify(loggedUser));
+        setAppUser(loggedUser);
+
+        if (data.customToken) {
+          await signInWithCustomToken(auth, data.customToken).catch(() => {});
+        }
+
+        const serverWs = await hydrateUserWorkspace(loggedUser.uid, data.sessionToken);
+        let effectiveProfile: StudentProfile | null = serverWs?.studentProfile || null;
+        if (!effectiveProfile && auth.currentUser) {
+          effectiveProfile = await fetchStudentProfile(loggedUser.uid).catch(() => null);
+        }
+        if (!effectiveProfile) {
+          try {
+            const cached = window.localStorage.getItem(`ais_profile_${loggedUser.uid}`);
+            if (cached) effectiveProfile = JSON.parse(cached);
+          } catch {
+            // Ignore
+          }
+        }
+
+        if (effectiveProfile) {
+          setStudentProfile(effectiveProfile);
+          window.localStorage.setItem(`ais_profile_${loggedUser.uid}`, JSON.stringify(effectiveProfile));
+          setCurrentPage(effectiveProfile.onboardingCompleted ? 'dashboard' : 'onboarding');
+        } else {
+          setCurrentPage('onboarding');
+        }
+        showToast('Welcome back to AI STUDENTS.', 'success');
+        return;
       }
-      showToast('Welcome back to AI STUDENTS.', 'success');
+
+      if (isCapacitorNative() && isEmailIdentifier) {
+        try {
+          await signInWithEmailAndPassword(auth, trimmedIdentifier, password);
+          showToast('Welcome back to AI STUDENTS.', 'success');
+          return;
+        } catch (fbErr: any) {
+          throw mapFirebaseEmailAuthError(fbErr);
+        }
+      }
+
+      if (isCapacitorNative() && !isEmailIdentifier) {
+        throw new Error(
+          'Backend API is unreachable for mobile/password sign-in. Please use the Mobile OTP tab or Email & Password.'
+        );
+      }
+
+      throw new Error(data?.error || 'Sign in failed.');
     },
     [hydrateUserWorkspace, showToast]
   );
@@ -806,7 +1271,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications([]);
     setAiChatHistories({});
     setSupportTickets([]);
-    if (isCapacitorNative()) {
+    phoneConfirmationRef.current = null;
+    if (recaptchaVerifierRef.current) {
+      try {
+        recaptchaVerifierRef.current.clear();
+      } catch {
+        // Ignore
+      }
+      recaptchaVerifierRef.current = null;
+    }
+    if (isFirebaseAuthPluginAvailable()) {
       await FirebaseAuthentication.signOut().catch(() => {});
     }
     if (auth.currentUser) {
@@ -1509,6 +1983,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sessionToken,
         getApiHeaders,
         signInWithGoogle,
+        sendPhoneOtp,
+        verifyPhoneOtp,
+        sendFirebasePasswordReset,
         registerWithCredentials,
         loginWithCredentials,
         logout,

@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { initializeApp } from 'firebase/app';
 import {
+  browserLocalPersistence,
   getAuth,
   GoogleAuthProvider,
   indexedDBLocalPersistence,
@@ -17,7 +18,7 @@ function createFirebaseAuth(): Auth {
   if (Capacitor.isNativePlatform()) {
     try {
       return initializeAuth(app, {
-        persistence: indexedDBLocalPersistence,
+        persistence: [indexedDBLocalPersistence, browserLocalPersistence],
       });
     } catch {
       return getAuth(app);

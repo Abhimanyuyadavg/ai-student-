@@ -5,12 +5,40 @@ const DEFAULT_NATIVE_API_BASE_URL =
 
 let bridgeInstalled = false;
 
+export function getRuntimePlatform(): 'android' | 'ios' | 'web' {
+  try {
+    const platform = Capacitor.getPlatform();
+    if (platform === 'android' || platform === 'ios') {
+      return platform;
+    }
+    return 'web';
+  } catch {
+    return 'web';
+  }
+}
+
 export function isCapacitorNative(): boolean {
   try {
     return Capacitor.isNativePlatform();
   } catch {
     return false;
   }
+}
+
+export function isNativeAndroid(): boolean {
+  return isCapacitorNative() && getRuntimePlatform() === 'android';
+}
+
+export function isCapacitorPluginAvailable(pluginName: string): boolean {
+  try {
+    return Capacitor.isPluginAvailable(pluginName);
+  } catch {
+    return false;
+  }
+}
+
+export function isFirebaseAuthPluginAvailable(): boolean {
+  return isCapacitorNative() && isCapacitorPluginAvailable('FirebaseAuthentication');
 }
 
 export function getApiBaseUrl(): string {

@@ -1,16 +1,30 @@
-import React, { useState } from 'react';
-import { ArrowLeft, Eye, EyeOff, ImagePlus, Lock, Mail, ShieldCheck, User, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, Eye, EyeOff, ImagePlus, Lock, Mail, Phone, ShieldCheck, User, X } from 'lucide-react';
 import { useApp } from '../context/AppContext.tsx';
 import { validateAndCompressImageFile } from '../lib/imageUtils.ts';
 import { BrandLogo } from '../components/BrandLogo.tsx';
 
 export const AuthPage: React.FC = () => {
-  const { navParams, navigate, signInWithGoogle, registerWithCredentials, loginWithCredentials, showToast } = useApp();
-  const [mode, setMode] = useState<'login' | 'register'>(navParams.authMode || 'login');
+  const {
+    navParams,
+    navigate,
+    signInWithGoogle,
+    sendPhoneOtp,
+    verifyPhoneOtp,
+    registerWithCredentials,
+    loginWithCredentials,
+    showToast,
+  } = useApp();
+  const [mode, setMode] = useState<'login' | 'register' | 'otp'>(navParams.authMode || 'login');
   const [displayName, setDisplayName] = useState('');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
+  const [otpVerificationId, setOtpVerificationId] = useState('');
+  const [otpNormalizedPhone, setOtpNormalizedPhone] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpCooldown, setOtpCooldown] = useState(0);
   const [photoUrl, setPhotoUrl] = useState('');
   const [pendingPhotoDataUrl, setPendingPhotoDataUrl] = useState('');
   const [isUnder18, setIsUnder18] = useState(true);
@@ -20,6 +34,14 @@ export const AuthPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setOtpCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [otpCooldown]);
 
   const handleGoogle = async () => {
     setError('');
@@ -33,13 +55,70 @@ export const AuthPage: React.FC = () => {
     }
   };
 
+  const validateIdentifier = (raw: string): string | null => {
+    const trimmed = raw.trim();
+    if (!trimmed) return 'Please enter your email address or 10-digit mobile number.';
+    if (trimmed.includes('@')) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        return 'Please enter a valid email address (e.g., student@example.com).';
+      }
+      return null;
+    }
+    const digits = trimmed.replace(/[\s+()-]/g, '');
+    if (!/^\d{10,15}$/.test(digits)) {
+      return 'Please enter a valid email address or 10-digit mobile number.';
+    }
+    return null;
+  };
+
+  const handleSendOtp = async (isResend = false) => {
+    setError('');
+    setLoading(true);
+    try {
+      const res = await sendPhoneOtp(phoneInput, {
+        resend: isResend,
+        recaptchaContainerId: 'recaptcha-container',
+      });
+      if (!res.autoSignedIn) {
+        setOtpVerificationId(res.verificationId);
+        setOtpNormalizedPhone(res.normalizedPhone);
+        setOtpCooldown(30);
+        showToast(`OTP sent to ${res.normalizedPhone}`, 'success');
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Unable to send OTP.';
+      setError(msg);
+      showToast(msg, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await verifyPhoneOtp(otpVerificationId, otpCode);
+    } catch (err: any) {
+      const msg = err?.message || 'OTP verification failed.';
+      setError(msg);
+      showToast(msg, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
+    const idErr = validateIdentifier(identifier);
+    if (idErr) return setError(idErr);
+
     if (mode === 'register') {
       if (displayName.trim().length < 2) {
-        return setError('Please enter your full name or display name.');
+        return setError('Please enter your full name or display name (at least 2 characters).');
       }
       if (password.length < 8) {
         return setError('Password must be at least 8 characters long.');
@@ -53,6 +132,8 @@ export const AuthPage: React.FC = () => {
       if (isUnder18 && (!guardianConsent || !guardianContact.trim())) {
         return setError('Students under 18 require guardian consent confirmation and guardian email/phone.');
       }
+    } else if (!password) {
+      return setError('Please enter your password.');
     }
 
     setLoading(true);
@@ -95,14 +176,14 @@ export const AuthPage: React.FC = () => {
           <BrandLogo size="md" subtitle="Official Student Portal" />
         </div>
 
-        <div className="flex items-center gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg mb-6">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg mb-6">
           <button
             type="button"
             onClick={() => {
               setMode('login');
               setError('');
             }}
-            className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors cursor-pointer ${
+            className={`flex-1 py-2 text-xs sm:text-sm font-semibold rounded-md transition-colors cursor-pointer ${
               mode === 'login'
                 ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
                 : 'text-slate-600 dark:text-slate-400'
@@ -116,23 +197,43 @@ export const AuthPage: React.FC = () => {
               setMode('register');
               setError('');
             }}
-            className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors cursor-pointer ${
+            className={`flex-1 py-2 text-xs sm:text-sm font-semibold rounded-md transition-colors cursor-pointer ${
               mode === 'register'
                 ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
                 : 'text-slate-600 dark:text-slate-400'
             }`}
           >
-            Student Register
+            Register
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('otp');
+              setError('');
+            }}
+            className={`flex-1 py-2 text-xs sm:text-sm font-semibold rounded-md transition-colors cursor-pointer ${
+              mode === 'otp'
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            Mobile OTP
           </button>
         </div>
 
         <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-white">
-          {mode === 'login' ? 'Sign in to AI STUDENTS' : 'Create your student account'}
+          {mode === 'login'
+            ? 'Sign in to AI STUDENTS'
+            : mode === 'register'
+              ? 'Create your student account'
+              : 'Verify Mobile Number (OTP)'}
         </h1>
         <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
           {mode === 'login'
             ? 'Access your chapters, AI Teacher, tests, and personal timetable.'
-            : 'Set up your Class 10, 11, or 12 preparation workspace safely.'}
+            : mode === 'register'
+              ? 'Set up your Class 10, 11, or 12 preparation workspace safely.'
+              : 'Sign in using Firebase SMS OTP verification.'}
         </p>
 
         {/* Primary Google Sign-In */}
@@ -175,6 +276,93 @@ export const AuthPage: React.FC = () => {
           </div>
         )}
 
+        <div id="recaptcha-container" />
+
+        {mode === 'otp' ? (
+          otpVerificationId ? (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <div className="p-3 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-xs text-indigo-800 dark:text-indigo-200">
+                Enter the 6-digit OTP sent to <strong>{otpNormalizedPhone}</strong>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                  6-Digit OTP Code
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="123456"
+                  className="w-full px-3 py-2 text-sm tracking-widest rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2.5 px-4 text-sm font-semibold text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors cursor-pointer disabled:opacity-60"
+              >
+                {loading ? 'Verifying OTP...' : 'Verify & Sign In'}
+              </button>
+              <div className="flex items-center justify-between text-xs">
+                <button
+                  type="button"
+                  disabled={loading || otpCooldown > 0}
+                  onClick={() => handleSendOtp(true)}
+                  className="font-semibold text-indigo-700 dark:text-indigo-400 hover:underline disabled:opacity-50 cursor-pointer"
+                >
+                  {otpCooldown > 0 ? `Resend OTP in ${otpCooldown}s` : 'Resend OTP'}
+                </button>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    setOtpVerificationId('');
+                    setOtpCode('');
+                    setError('');
+                  }}
+                  className="text-slate-500 hover:underline cursor-pointer"
+                >
+                  Change Mobile Number
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleSendOtp(false);
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                  Mobile Number (10-digit India or +CountryCode)
+                </label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="tel"
+                    required
+                    value={phoneInput}
+                    onChange={(e) => setPhoneInput(e.target.value)}
+                    placeholder="9876543210 or +919876543210"
+                    className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2.5 px-4 text-sm font-semibold text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors cursor-pointer disabled:opacity-60"
+              >
+                {loading ? 'Sending OTP...' : 'Send OTP'}
+              </button>
+            </form>
+          )
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === 'register' && (
             <div>
@@ -375,6 +563,7 @@ export const AuthPage: React.FC = () => {
             {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
           </button>
         </form>
+        )}
 
         <div className="mt-5 pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
           <button
@@ -398,7 +587,7 @@ export const AuthPage: React.FC = () => {
 };
 
 export const ForgotPasswordPage: React.FC = () => {
-  const { navigate, showToast } = useApp();
+  const { navigate, sendFirebasePasswordReset, showToast } = useApp();
   const [step, setStep] = useState<'request' | 'reset'>('request');
   const [identifier, setIdentifier] = useState('');
   const [code, setCode] = useState('');
@@ -410,18 +599,68 @@ export const ForgotPasswordPage: React.FC = () => {
   const handleRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setMessage('');
+    const trimmed = identifier.trim();
+    if (!trimmed) {
+      return setError('Please enter your registered email address or mobile number.');
+    }
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Request failed');
-      setMessage(data.message);
-      if (data.deliveryConfigured) {
+      let data: any = null;
+      let backendOk = false;
+      try {
+        const res = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: trimmed }),
+        });
+        const text = await res.text();
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch {
+          data = null;
+        }
+        if (res.ok && data) {
+          backendOk = true;
+        } else if (data?.error) {
+          throw new Error(data.error);
+        }
+      } catch (reqErr: any) {
+        if (!trimmed.includes('@')) {
+          throw reqErr;
+        }
+      }
+
+      if (backendOk && data?.deliveryConfigured) {
+        setMessage(data.message);
         setStep('reset');
+      } else if (trimmed.includes('@')) {
+        try {
+          await sendFirebasePasswordReset(trimmed);
+          setMessage(
+            'If this email is registered with Firebase Email/Password authentication, a password reset link has been sent to your inbox. For Google Sign-In accounts, sign in with Google or recover via Google Account.'
+          );
+        } catch (fbErr: any) {
+          const fbCode = String(fbErr?.code || '');
+          if (fbCode === 'auth/user-not-found') {
+            setMessage(
+              data?.message ||
+                'If this email is registered with AI STUDENTS, recovery instructions have been processed.'
+            );
+          } else {
+            setMessage(
+              data?.message
+                ? `${data.message} (Email reset delivery requires SMTP configuration on server or Firebase Email/Password auth enabled.)`
+                : fbErr?.message || 'Unable to send Firebase password reset email.'
+            );
+          }
+        }
+      } else if (backendOk && data?.message) {
+        setMessage(data.message);
+      } else {
+        throw new Error(
+          'Password recovery for mobile-number accounts requires a connected backend server. Use Mobile OTP login or Email recovery.'
+        );
       }
     } catch (err: any) {
       setError(err.message);
