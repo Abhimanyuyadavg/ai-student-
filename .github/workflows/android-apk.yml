@@ -10,6 +10,12 @@ on:
       - main
       - master
   workflow_dispatch:
+    inputs:
+      require_firebase_config:
+        description: 'Fail build if GOOGLE_SERVICES_JSON_BASE64 secret is not configured'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -28,7 +34,7 @@ jobs:
         with:
           node-version: '22'
 
-      - name: 3. Setup Java compatible version (Java 21)
+      - name: 3. Setup Java 21
         uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
@@ -61,30 +67,45 @@ jobs:
         run: npm run build
 
       - name: 8. Configure and validate Android google-services.json
+        id: firebase_config
         env:
           GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          REQUIRE_FIREBASE_CONFIG: ${{ inputs.require_firebase_config || 'false' }}
         run: |
           set -euo pipefail
-
-          if [ -z "${GOOGLE_SERVICES_JSON_BASE64:-}" ]; then
-            echo "::error::Missing required GitHub Actions secret GOOGLE_SERVICES_JSON_BASE64. Add it under Repository -> Settings -> Secrets and variables -> Actions -> New repository secret."
-            exit 1
-          fi
-
+          TARGET_FILE="android/app/google-services.json"
           mkdir -p android/app
-          if ! printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | tr -d '\r\n[:space:]' | base64 --decode > android/app/google-services.json 2>/dev/null; then
-            rm -f android/app/google-services.json
-            echo "::error::Failed to Base64-decode GOOGLE_SERVICES_JSON_BASE64. Verify the secret contains valid Base64 encoded google-services.json."
-            exit 1
+
+          if [ -n "${GOOGLE_SERVICES_JSON_BASE64:-}" ]; then
+            if ! printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | tr -d '\r\n[:space:]' | base64 --decode > "$TARGET_FILE" 2>/dev/null; then
+              rm -f "$TARGET_FILE"
+              echo "::error::Failed to Base64-decode GOOGLE_SERVICES_JSON_BASE64. Re-encode google-services.json without line breaks and update the repository secret."
+              exit 1
+            fi
+            echo "Decoded android/app/google-services.json from GOOGLE_SERVICES_JSON_BASE64 secret."
+          elif [ -n "${GOOGLE_SERVICES_JSON:-}" ]; then
+            printf '%s\n' "$GOOGLE_SERVICES_JSON" > "$TARGET_FILE"
+            echo "Wrote android/app/google-services.json from GOOGLE_SERVICES_JSON secret."
+          elif [ -f "$TARGET_FILE" ]; then
+            echo "Using existing android/app/google-services.json file."
+          else
+            if [ "$REQUIRE_FIREBASE_CONFIG" = "true" ]; then
+              echo "::error::Missing required GitHub Actions secret GOOGLE_SERVICES_JSON_BASE64. Add it under Repository -> Settings -> Secrets and variables -> Actions -> New repository secret."
+              exit 1
+            fi
+            echo "firebase_configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub secret GOOGLE_SERVICES_JSON_BASE64 is not configured yet. Continuing Android APK build without google-services.json (native Android Google Sign-In and Phone OTP require adding GOOGLE_SERVICES_JSON_BASE64 in Repository -> Settings -> Secrets and variables -> Actions)."
+            exit 0
           fi
 
-          if [ ! -s android/app/google-services.json ]; then
-            rm -f android/app/google-services.json
+          if [ ! -s "$TARGET_FILE" ]; then
+            rm -f "$TARGET_FILE"
             echo "::error::Decoded android/app/google-services.json is empty."
             exit 1
           fi
 
-          python3 - <<'PY'
+          if ! python3 - <<'PY'
           import json
           import os
           import sys
@@ -153,6 +174,12 @@ jobs:
           print("Validated android/app/google-services.json for package com.aistudents.app.")
           print(f"OAuth clients present - web (client_type=3): {has_web_oauth}, android SHA (client_type=1): {has_android_oauth}")
           PY
+          then
+            rm -f "$TARGET_FILE"
+            exit 1
+          fi
+
+          echo "firebase_configured=true" >> "$GITHUB_OUTPUT"
 
       - name: 9. Capacitor sync Android
         run: npx cap sync android
@@ -209,6 +236,6 @@ jobs:
             echo "## AI Students Android APK Ready"
             echo "- **Artifact**: \`ai-students-debug-apk\`"
             echo "- **APK Size**: $(du -h "$APK_PATH" | cut -f1)"
-            echo "- **Firebase Android Configuration**: Verified for \`com.aistudents.app\`"
+            echo "- **Firebase Android google-services.json configured**: \`${{ steps.firebase_config.outputs.firebase_configured }}\`"
             echo "- **Direct Release Download**: $DOWNLOAD_URL"
           } >> "$GITHUB_STEP_SUMMARY"
